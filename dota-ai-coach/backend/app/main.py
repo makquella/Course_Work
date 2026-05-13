@@ -43,8 +43,8 @@ def recommend(request: GameSituationRequest):
         + " ".join(request.items)
     )
 
-    rag_context = retrieve_context(query)
-    recommendation = generate_recommendation(request)
+    rag_context = retrieve_context(query, hero=request.hero, game_state=request.game_state)
+    recommendation = generate_recommendation(request, rag_context)
     log_path = log_recommendation(request, rag_context, recommendation)
 
     # Attach the log filename as a response header for easy debugging

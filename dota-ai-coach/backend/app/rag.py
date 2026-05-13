@@ -1,11 +1,18 @@
 """
-rag.py — simple keyword-based retrieval from local Markdown knowledge base.
+rag.py — keyword-based retrieval from local Markdown knowledge base.
 
-No embeddings — just paragraph splitting and token-overlap scoring.
+Scoring weights:
+  - base:       token overlap with the full query
+  - hero bonus: +5 if the paragraph mentions the current hero (strong signal)
+  - gs bonus:   +2 if the paragraph mentions game_state keywords (medium signal)
+  - penalty:    -3 if the paragraph mentions a different hero (noise reduction)
 """
 
 from pathlib import Path
 from app.config import KNOWLEDGE_BASE_DIR, RAG_TOP_K
+
+# Heroes tracked in the knowledge base (lowercase, space-separated)
+_KNOWN_HEROES = {"anti-mage", "juggernaut", "luna"}
 
 
 def _load_paragraphs(kb_dir: Path) -> list[str]:
@@ -20,24 +27,56 @@ def _load_paragraphs(kb_dir: Path) -> list[str]:
     return paragraphs
 
 
-def _score(paragraph: str, query_tokens: set[str]) -> int:
-    """Count how many query tokens appear in the paragraph (case-insensitive)."""
-    para_tokens = set(paragraph.lower().split())
-    return len(query_tokens & para_tokens)
+def _score(
+    paragraph: str,
+    query_tokens: set[str],
+    hero_words: set[str],
+    gs_words: set[str],
+) -> float:
+    """Score a paragraph against the query with hero/game_state bonuses."""
+    para_lower = paragraph.lower()
+    para_tokens = set(para_lower.split())
+
+    base = len(query_tokens & para_tokens)
+
+    # Strong bonus for paragraphs that mention the current hero
+    hero_bonus = 5 if hero_words & para_tokens else 0
+
+    # Medium bonus for paragraphs that mention game_state keywords
+    gs_bonus = 2 if gs_words & para_tokens else 0
+
+    # Penalty if paragraph is about a *different* known hero
+    other_heroes = _KNOWN_HEROES - hero_words
+    penalty = -3 if any(h in para_lower for h in other_heroes) else 0
+
+    return base + hero_bonus + gs_bonus + penalty
 
 
-def retrieve_context(query: str, top_k: int = RAG_TOP_K) -> list[str]:
+def retrieve_context(
+    query: str,
+    hero: str = "",
+    game_state: str = "",
+    top_k: int = RAG_TOP_K,
+) -> list[str]:
     """
-    Return the top_k most relevant paragraphs from the knowledge base
-    for the given query string.
+    Return the top_k most relevant paragraphs from the knowledge base.
+
+    hero and game_state are used to adjust scores beyond plain token overlap.
     """
     paragraphs = _load_paragraphs(KNOWLEDGE_BASE_DIR)
     if not paragraphs:
         return []
 
     query_tokens = set(query.lower().split())
-    scored = [(para, _score(para, query_tokens)) for para in paragraphs]
-    # Sort by score descending; keep only paragraphs with at least one match
+    hero_words = set(hero.lower().split())
+    # Split game_state on underscores too (e.g. "enemy_pressure_mid" → {"enemy","pressure","mid"})
+    gs_words = set(game_state.lower().replace("_", " ").split())
+
+    scored = [
+        (para, _score(para, query_tokens, hero_words, gs_words))
+        for para in paragraphs
+    ]
     scored.sort(key=lambda x: x[1], reverse=True)
+    # Only keep paragraphs with a positive final score
     top = [para for para, score in scored[:top_k] if score > 0]
     return top
