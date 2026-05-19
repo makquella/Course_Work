@@ -2,8 +2,11 @@
 main.py — FastAPI application entry point for Dota AI Coach (MVP-1).
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.schemas import GameSituationRequest, RecommendationResponse
 from app.rag import retrieve_context
@@ -15,6 +18,11 @@ app = FastAPI(
     description="MVP-1: rule-based carry coach with local knowledge-base RAG.",
     version="0.1.0",
 )
+
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+
+if FRONTEND_DIR.exists():
+    app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 
 @app.get("/", summary="Health check")

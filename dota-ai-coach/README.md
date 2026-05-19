@@ -32,7 +32,10 @@ dota-ai-coach/
 │       ├── juggernaut_low_hp.json
 │       └── luna_farm_or_fight.json
 ├── docs/
-├── frontend/                # Placeholder — not implemented yet
+├── frontend/                # Minimal browser UI for POST /recommend
+│   ├── index.html
+│   ├── styles.css
+│   └── script.js
 └── README.md
 ```
 
@@ -62,6 +65,16 @@ uvicorn app.main:app --reload
 
 The API will be available at `http://127.0.0.1:8000`.  
 Interactive docs (Swagger UI): `http://127.0.0.1:8000/docs`
+
+### 4. Open the frontend
+
+With the backend server still running, open:
+
+```text
+http://127.0.0.1:8000/frontend/
+```
+
+The page sends JSON to `http://127.0.0.1:8000/recommend` and displays the returned recommendation fields.
 
 ---
 
