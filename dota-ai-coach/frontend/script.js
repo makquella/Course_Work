@@ -1,21 +1,48 @@
 const API_URL = "http://127.0.0.1:8000/recommend";
 
-const defaultScenario = {
-  hero: "Anti-Mage",
-  role: "carry",
-  minute: 14,
-  level: 10,
-  gold: 1800,
-  items: ["Power Treads", "Ring of Health", "Claymore"],
-  hp_percent: 70,
-  game_state: "enemy_pressure_mid",
-  team_status: "supports_dead"
+const presets = {
+  antimage: {
+    hero: "Anti-Mage",
+    role: "carry",
+    minute: 14,
+    level: 10,
+    gold: 1800,
+    items: ["Power Treads", "Ring of Health", "Claymore"],
+    hp_percent: 70,
+    game_state: "enemy_pressure_mid",
+    team_status: "supports_dead"
+  },
+  juggernaut: {
+    hero: "Juggernaut",
+    role: "carry",
+    minute: 22,
+    level: 14,
+    gold: 800,
+    items: ["Power Treads", "Maelstrom", "Magic Wand"],
+    hp_percent: 28,
+    game_state: "skirmish_near_top_tier2",
+    team_status: "all_alive"
+  },
+  luna: {
+    hero: "Luna",
+    role: "carry",
+    minute: 27,
+    level: 16,
+    gold: 3200,
+    items: ["Power Treads", "Manta Style", "Helm of the Dominator"],
+    hp_percent: 85,
+    game_state: "team_fight_breaking_out_bot",
+    team_status: "full_team_alive"
+  }
 };
 
 const scenarioInput = document.querySelector("#scenario-input");
 const recommendButton = document.querySelector("#recommend-button");
+const loadingMessage = document.querySelector("#loading-message");
+const presetButtons = document.querySelectorAll(".preset-button");
 const resultPanel = document.querySelector("#result-panel");
 const errorPanel = document.querySelector("#error-panel");
+const errorSummary = document.querySelector("#error-summary");
 const errorMessage = document.querySelector("#error-message");
 
 const resultFields = {
@@ -27,12 +54,18 @@ const resultFields = {
   source: document.querySelector("#result-source")
 };
 
-scenarioInput.value = JSON.stringify(defaultScenario, null, 2);
+setScenario("antimage");
+
+presetButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setScenario(button.dataset.preset);
+    clearMessages();
+  });
+});
 
 recommendButton.addEventListener("click", async () => {
   clearMessages();
-  recommendButton.disabled = true;
-  recommendButton.textContent = "Loading...";
+  setLoading(true);
 
   try {
     const payload = parseScenario();
@@ -47,15 +80,25 @@ recommendButton.addEventListener("click", async () => {
     const data = await readJsonResponse(response);
 
     if (!response.ok) {
-      throw new Error(formatBackendError(data, response.status));
+      throw formatBackendError(data, response.status);
     }
 
     showRecommendation(data);
   } catch (error) {
-    showError(error.message);
+    if (error instanceof TypeError) {
+      showError(
+        "Could not reach the backend. Make sure FastAPI is running at http://127.0.0.1:8000.",
+        error.message
+      );
+      return;
+    }
+
+    showError(
+      error.userMessage ?? "Something went wrong while generating the recommendation.",
+      error.details ?? error.message
+    );
   } finally {
-    recommendButton.disabled = false;
-    recommendButton.textContent = "Get Recommendation";
+    setLoading(false);
   }
 });
 
@@ -63,7 +106,10 @@ function parseScenario() {
   try {
     return JSON.parse(scenarioInput.value);
   } catch (error) {
-    throw new Error(`Invalid JSON: ${error.message}`);
+    throw createDisplayError(
+      "The JSON is not valid. Fix the syntax and try again.",
+      error.message
+    );
   }
 }
 
@@ -77,7 +123,10 @@ async function readJsonResponse(response) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error(`Backend returned non-JSON response with status ${response.status}.`);
+    throw createDisplayError(
+      "The backend returned a response the frontend could not read.",
+      `Backend returned non-JSON response with status ${response.status}.`
+    );
   }
 }
 
@@ -89,30 +138,57 @@ function showRecommendation(data) {
   resultPanel.classList.remove("hidden");
 }
 
-function showError(message) {
-  errorMessage.textContent = message;
+function showError(summary, details) {
+  errorSummary.textContent = summary;
+  errorMessage.textContent = details;
   errorPanel.classList.remove("hidden");
 }
 
 function clearMessages() {
   resultPanel.classList.add("hidden");
   errorPanel.classList.add("hidden");
+  errorSummary.textContent = "";
   errorMessage.textContent = "";
 }
 
 function formatBackendError(data, status) {
   if (Array.isArray(data.detail)) {
-    return data.detail
+    const details = data.detail
       .map((item) => {
         const location = Array.isArray(item.loc) ? item.loc.join(".") : "request";
         return `${location}: ${item.msg}`;
       })
       .join("\n");
+
+    return createDisplayError(
+      "The backend rejected this scenario. Check the highlighted fields in the technical details.",
+      details
+    );
   }
 
   if (typeof data.detail === "string") {
-    return data.detail;
+    return createDisplayError("The backend rejected this request.", data.detail);
   }
 
-  return `Request failed with status ${status}.`;
+  return createDisplayError(
+    "The backend could not generate a recommendation for this request.",
+    `Request failed with status ${status}.`
+  );
+}
+
+function setScenario(presetName) {
+  scenarioInput.value = JSON.stringify(presets[presetName], null, 2);
+}
+
+function setLoading(isLoading) {
+  recommendButton.disabled = isLoading;
+  recommendButton.textContent = isLoading ? "Generating..." : "Get Recommendation";
+  loadingMessage.classList.toggle("hidden", !isLoading);
+}
+
+function createDisplayError(userMessage, details) {
+  const error = new Error(details);
+  error.userMessage = userMessage;
+  error.details = details;
+  return error;
 }

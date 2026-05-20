@@ -75,6 +75,7 @@ http://127.0.0.1:8000/frontend/
 ```
 
 The page sends JSON to `http://127.0.0.1:8000/recommend` and displays the returned recommendation fields.
+Use a preset scenario button or edit the JSON manually, then click **Get Recommendation**.
 
 ---
 

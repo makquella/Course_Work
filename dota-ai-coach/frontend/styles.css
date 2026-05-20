@@ -7,6 +7,7 @@
   --border: #ccd6dd;
   --primary: #216a5b;
   --primary-dark: #184e43;
+  --primary-soft: #e8f2ef;
   --code-bg: #f7f9fb;
   --error-bg: #fff3f0;
   --error-border: #de8b7d;
@@ -96,6 +97,35 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.instruction-panel ol {
+  margin: 0;
+  padding-left: 22px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.preset-button {
+  min-height: 38px;
+  margin-top: 0;
+  padding: 0 14px;
+  border: 1px solid rgba(33, 106, 91, 0.28);
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.preset-button:hover {
+  background: #d9ebe6;
+}
+
 textarea {
   display: block;
   width: 100%;
@@ -140,6 +170,12 @@ button:disabled {
   opacity: 0.68;
 }
 
+.loading-message {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .result-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -175,8 +211,23 @@ dd {
   color: var(--error-text);
 }
 
+.error-summary {
+  margin-bottom: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.error-details {
+  color: #734138;
+}
+
+.error-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .error-panel pre {
-  margin: 0;
+  margin: 10px 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: 0.92rem/1.5 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -211,6 +262,11 @@ dd {
 
   button {
     width: 100%;
+  }
+
+  .preset-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .result-grid {
