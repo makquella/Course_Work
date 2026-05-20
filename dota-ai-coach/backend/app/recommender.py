@@ -7,6 +7,7 @@ not to paste raw paragraphs.
 """
 
 from app.schemas import GameSituationRequest, RecommendationResponse
+from app.decision_points import has_objective_fight_signal, has_pressure_signal
 
 
 def _find_timing_hint(rag_context: list[str]) -> str:
@@ -47,7 +48,9 @@ def generate_recommendation(
 
     # Rule 2 — enemy pressure early game: avoid low-value fights.
     # RAG hint: look for hero-specific weakness or item timing info.
-    if "pressure" in req.game_state.lower() and req.minute < 18:
+    state = {"game_state": req.game_state, "team_status": req.team_status}
+
+    if has_pressure_signal(state) and req.minute < 18:
         hint = _find_timing_hint(rag_context)
         reason = (
             f"{req.hero} is in the early farming phase at minute {req.minute} "
@@ -65,7 +68,7 @@ def generate_recommendation(
 
     # Rule 3 — fight scenario with sufficient level: join only near objectives.
     # RAG hint skipped — adding a "farm more" hint here would contradict the fight advice.
-    if "fight" in req.game_state.lower() and req.level >= 12:
+    if has_objective_fight_signal(state) and req.level >= 12:
         return RecommendationResponse(
             action="Join the fight only if it is near Roshan, Barracks, or a tower.",
             reason=(
