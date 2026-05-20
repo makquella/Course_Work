@@ -14,7 +14,7 @@ def _find_timing_hint(rag_context: list[str]) -> str:
     Scan RAG paragraphs for a sentence about hero weakness or item power spike.
     Returns the first matching sentence, or an empty string.
     """
-    spike_keywords = {"before", "spike", "weak", "until", "timing"}
+    spike_keywords = {"spike", "weak", "until"}
     for para in rag_context:
         for sentence in para.replace("\n", " ").split("."):
             s = sentence.strip()
@@ -89,7 +89,7 @@ def generate_recommendation(
     return RecommendationResponse(
         action="Focus on efficient farming and track the next major objective timing.",
         reason=reason,
-        risk="Low — avoid unnecessary risks while ahead on farm.",
+        risk="Low — avoid unnecessary risks while maintaining farm efficiency.",
         priority="low",
         time_window="reassess in 60 seconds",
     )

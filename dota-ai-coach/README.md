@@ -147,6 +147,13 @@ curl -X POST http://127.0.0.1:8000/recommend \
 3. **Fallback recommender** — A short rule chain produces a structured recommendation based on HP level, game-state keywords, and hero level.
 4. **Logging** — Every request is saved as a timestamped JSON file in `backend/logs/`.
 
+### Validation Notes
+
+- MVP-1 supports only three heroes: `Anti-Mage`, `Juggernaut`, and `Luna`.
+- Item names are trimmed before processing.
+- Empty item names, such as `""` or `"   "`, are rejected.
+- Retrieved knowledge-base context is filtered so it does not add timing hints that contradict already-owned items.
+
 ---
 
 ## Roadmap

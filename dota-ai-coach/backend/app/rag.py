@@ -15,6 +15,25 @@ from app.config import KNOWLEDGE_BASE_DIR, RAG_TOP_K
 _KNOWN_HEROES = {"anti-mage", "juggernaut", "luna"}
 
 
+def _normalise_item_name(item: str) -> str:
+    return " ".join(item.lower().split())
+
+
+def _paragraph_contradicts_owned_items(paragraph: str, owned_items: list[str]) -> bool:
+    """Skip context that says the hero is still before an item the request already owns."""
+    paragraph_lower = " ".join(paragraph.lower().split())
+    owned_item_names = {_normalise_item_name(item) for item in owned_items}
+
+    for item in owned_item_names:
+        if not item:
+            continue
+        if f"before {item}" in paragraph_lower or f"until {item}" in paragraph_lower:
+            return True
+        if item in paragraph_lower and "until your spike" in paragraph_lower:
+            return True
+    return False
+
+
 def _load_paragraphs(kb_dir: Path) -> list[str]:
     """Read all .md files and split into non-empty paragraphs."""
     paragraphs: list[str] = []
@@ -56,6 +75,7 @@ def retrieve_context(
     query: str,
     hero: str = "",
     game_state: str = "",
+    owned_items: list[str] | None = None,
     top_k: int = RAG_TOP_K,
 ) -> list[str]:
     """
@@ -64,6 +84,11 @@ def retrieve_context(
     hero and game_state are used to adjust scores beyond plain token overlap.
     """
     paragraphs = _load_paragraphs(KNOWLEDGE_BASE_DIR)
+    owned_items = owned_items or []
+    paragraphs = [
+        para for para in paragraphs
+        if not _paragraph_contradicts_owned_items(para, owned_items)
+    ]
     if not paragraphs:
         return []
 

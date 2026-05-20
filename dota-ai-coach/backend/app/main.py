@@ -51,7 +51,12 @@ def recommend(request: GameSituationRequest):
         + " ".join(request.items)
     )
 
-    rag_context = retrieve_context(query, hero=request.hero, game_state=request.game_state)
+    rag_context = retrieve_context(
+        query,
+        hero=request.hero,
+        game_state=request.game_state,
+        owned_items=request.items,
+    )
     recommendation = generate_recommendation(request, rag_context)
     log_path = log_recommendation(request, rag_context, recommendation)
 
