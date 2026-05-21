@@ -172,6 +172,26 @@ curl -X POST http://127.0.0.1:8000/gsi \
   }'
 ```
 
+### Simulate GSI with sample payloads
+
+Start the backend, then post a sample from the repository root:
+
+```bash
+curl -X POST http://127.0.0.1:8000/gsi \
+  -H "Content-Type: application/json" \
+  -d @data/gsi_samples/low_hp_juggernaut.json
+
+curl http://127.0.0.1:8000/overlay/recommendation
+```
+
+Available samples:
+
+- `data/gsi_samples/low_hp_juggernaut.json` — triggers `LOW_HP`.
+- `data/gsi_samples/antimage_pressure_14min.json` — triggers `FARMING_PHASE_PRESSURE`.
+- `data/gsi_samples/luna_objective_fight.json` — triggers `OBJECTIVE_FIGHT_CHECK`.
+- `data/gsi_samples/calm_farming_antimage.json` — returns `NO_ADVICE`.
+- `data/gsi_samples/unsupported_hero.json` — returns `invalid_state`.
+
 ### GET /state/current
 
 ```bash

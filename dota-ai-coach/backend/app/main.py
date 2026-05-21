@@ -26,7 +26,7 @@ app = FastAPI(
 
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 OVERLAY_COOLDOWN_SECONDS = 60
-HIGH_PRIORITY_EVENTS = {"LOW_HP", "FARMING_PHASE_PRESSURE"}
+COOLDOWN_BYPASS_EVENTS = {"LOW_HP"}
 
 _last_overlay_recommendation: dict[str, Any] | None = None
 _last_overlay_generated_at: datetime | None = None
@@ -132,7 +132,7 @@ def overlay_recommendation():
 
     now = datetime.now(timezone.utc)
     cooldown_remaining = _cooldown_remaining(now)
-    if cooldown_remaining > 0 and event not in HIGH_PRIORITY_EVENTS:
+    if cooldown_remaining > 0 and event not in COOLDOWN_BYPASS_EVENTS:
         return {
             "status": "cooldown",
             "timestamp": current["timestamp"],

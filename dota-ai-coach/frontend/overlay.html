@@ -7,7 +7,7 @@
     <style>
       :root {
         color-scheme: light;
-        --bg: rgba(238, 242, 245, 0.96);
+        --bg: rgba(238, 242, 245, 0.94);
         --card: #ffffff;
         --text: #17202a;
         --muted: #62717c;
@@ -24,7 +24,7 @@
       body {
         margin: 0;
         min-width: 320px;
-        min-height: 180px;
+        min-height: 110px;
         background: var(--bg);
         color: var(--text);
       }
@@ -39,6 +39,10 @@
         border-radius: 8px;
         background: var(--card);
         box-shadow: 0 10px 24px rgba(30, 43, 52, 0.12);
+      }
+
+      .status-panel {
+        padding: 10px 4px;
       }
 
       .header {
@@ -70,6 +74,12 @@
         color: var(--muted);
         font-size: 0.92rem;
         line-height: 1.45;
+      }
+
+      .updated {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 0.75rem;
       }
 
       dl {
@@ -108,15 +118,18 @@
   </head>
   <body>
     <main>
-      <section class="card" aria-live="polite">
+      <section id="status-panel" class="status-panel" aria-live="polite">
+        <p id="status" class="status">Waiting for Dota 2 GSI...</p>
+        <p id="status-updated" class="updated">Last updated: --</p>
+      </section>
+
+      <section id="recommendation-card" class="card hidden" aria-live="polite">
         <div class="header">
           <h1>Dota AI Coach</h1>
           <span id="priority-badge" class="badge hidden"></span>
         </div>
 
-        <p id="status" class="status">Waiting for Dota 2 GSI...</p>
-
-        <dl id="recommendation" class="hidden">
+        <dl id="recommendation">
           <div>
             <dt>Action</dt>
             <dd id="action"></dd>
@@ -134,12 +147,16 @@
             <dd id="time-window"></dd>
           </div>
         </dl>
+        <p id="card-updated" class="updated">Last updated: --</p>
       </section>
     </main>
 
     <script>
+      const statusPanel = document.querySelector("#status-panel");
       const statusEl = document.querySelector("#status");
-      const recommendationEl = document.querySelector("#recommendation");
+      const statusUpdated = document.querySelector("#status-updated");
+      const recommendationCard = document.querySelector("#recommendation-card");
+      const cardUpdated = document.querySelector("#card-updated");
       const priorityBadge = document.querySelector("#priority-badge");
       const fields = {
         action: document.querySelector("#action"),
@@ -163,22 +180,22 @@
 
       function renderOverlay(data) {
         if (data.status === "waiting_for_gsi") {
-          showStatus("Waiting for Dota 2 GSI...");
+          showStatus("Waiting for Dota 2 GSI...", data.timestamp);
           return;
         }
 
         if (data.status === "invalid_state") {
-          showStatus("GSI state received, but it cannot be used for advice yet.");
+          showStatus("GSI state received, but it cannot be used for advice yet.", data.timestamp);
           return;
         }
 
         if (data.status === "cooldown" && !data.recommendation) {
-          showStatus("Advice cooldown active.");
+          showStatus("Advice cooldown active.", data.timestamp);
           return;
         }
 
         if (!data.recommendation) {
-          showStatus("No current advice.");
+          showStatus("No urgent advice", data.timestamp);
           return;
         }
 
@@ -190,15 +207,34 @@
         priorityBadge.textContent = recommendation.priority || "fallback";
         priorityBadge.className = `badge priority-${recommendation.priority || "low"}`;
         priorityBadge.classList.remove("hidden");
-        statusEl.classList.add("hidden");
-        recommendationEl.classList.remove("hidden");
+        cardUpdated.textContent = formatUpdated(data.timestamp);
+        statusPanel.classList.add("hidden");
+        recommendationCard.classList.remove("hidden");
       }
 
-      function showStatus(message) {
+      function showStatus(message, timestamp) {
         statusEl.textContent = message;
-        statusEl.classList.remove("hidden");
-        recommendationEl.classList.add("hidden");
+        statusUpdated.textContent = formatUpdated(timestamp);
+        statusPanel.classList.remove("hidden");
+        recommendationCard.classList.add("hidden");
         priorityBadge.classList.add("hidden");
+      }
+
+      function formatUpdated(timestamp) {
+        if (!timestamp) {
+          return "Last updated: --";
+        }
+
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) {
+          return "Last updated: just now";
+        }
+
+        return `Last updated: ${date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit"
+        })}`;
       }
     </script>
   </body>
