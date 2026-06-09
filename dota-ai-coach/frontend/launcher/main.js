@@ -382,9 +382,9 @@ async function runDemo(presetName = "plMacro", includeDeepReview = false) {
     "--simulation-file",
     demoFile,
     "--speed",
-    "10",
+    "5",
     "--advice-hold-seconds",
-    "6"
+    "8"
   ];
   if (includeDeepReview) {
     const slug = presetName === "juggSafety" ? "jugg_10_20" : "pl_20_30";

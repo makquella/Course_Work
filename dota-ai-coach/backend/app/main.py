@@ -480,6 +480,8 @@ def _overlay_response(
         "last_visible_advice": scheduled.last_visible_advice,
         "is_pinned": scheduled.is_pinned,
         "new_advice": scheduled.new_advice,
+        "game_time_gap_since_previous_advice": scheduled.game_time_gap_since_previous_advice,
+        "suppressed_by_game_time_spacing": scheduled.suppressed_by_game_time_spacing,
         "timestamp": gsi_timestamp,
         "event": scheduled.decision_point,
         **_overlay_live_context(state or {}),

@@ -67,9 +67,9 @@ def main() -> int:
 
     previous_timestamp: int | None = None
     previous_print_bucket: int | None = None
-    previous_advice_key = ""
     processed = 0
     advice_shown = 0
+    advice_gaps: list[float] = []
 
     try:
         for entry in entries:
@@ -87,11 +87,12 @@ def main() -> int:
             )
             processed += 1
 
-            advice_key = _advice_key(overlay)
-            is_new_advice = bool(advice_key and advice_key != previous_advice_key)
+            is_new_advice = bool(overlay.get("new_advice") and overlay.get("recommendation"))
             if is_new_advice:
-                previous_advice_key = advice_key
                 advice_shown += 1
+                gap = overlay.get("game_time_gap_since_previous_advice")
+                if isinstance(gap, (int, float)):
+                    advice_gaps.append(float(gap))
 
             print_bucket = timestamp_seconds // max(1, args.print_every_seconds)
             should_print = is_new_advice
@@ -120,6 +121,19 @@ def main() -> int:
         f"\nDemo playback complete. States sent: {processed}. Advice shown: {advice_shown}.",
         flush=True,
     )
+    if advice_gaps:
+        compact_gaps = ", ".join(str(round(gap, 1)) for gap in advice_gaps)
+        print(f"Game-time gaps between shown advice: {compact_gaps}", flush=True)
+        short_gaps = [gap for gap in advice_gaps if gap < 30]
+        if short_gaps:
+            compact_short_gaps = ", ".join(str(round(gap, 1)) for gap in short_gaps)
+            print(
+                "Short gaps below 30s: "
+                f"{compact_short_gaps} (allowed for urgent/safety interrupts such as LOW_HP).",
+                flush=True,
+            )
+        else:
+            print("No shown-advice game-time gap below 30 seconds.", flush=True)
     _export_reviews_if_requested(args, backend_url, entries)
     return 0
 
@@ -338,22 +352,6 @@ def _playback_delay(previous_timestamp: int | None, timestamp_seconds: int, spee
     return delta / speed
 
 
-def _advice_key(overlay: dict[str, Any]) -> str:
-    recommendation = overlay.get("recommendation")
-    if not isinstance(recommendation, dict):
-        return ""
-    if overlay.get("status") not in {"advice", "active_advice"}:
-        return ""
-    return "|".join(
-        str(part or "")
-        for part in (
-            overlay.get("decision_point"),
-            recommendation.get("action"),
-            recommendation.get("reason"),
-        )
-    )
-
-
 def _format_status_line(timestamp_seconds: int, state: dict[str, Any], overlay: dict[str, Any]) -> str:
     recommendation = overlay.get("recommendation")
     action = ""
@@ -370,6 +368,8 @@ def _format_status_line(timestamp_seconds: int, state: dict[str, Any], overlay: 
     suffix = f"{status}/{decision} source={source}"
     if confidence:
         suffix += f" confidence={confidence}"
+    if overlay.get("suppressed_by_game_time_spacing"):
+        suffix += " spacing=suppressed"
     if action:
         suffix += f" | {action}"
     return f"{prefix} -> {suffix}"
@@ -382,7 +382,11 @@ def _format_advice_line(timestamp_seconds: int, overlay: dict[str, Any]) -> str:
         action = str(recommendation.get("action") or "")
     status = overlay.get("status") or "advice"
     decision = overlay.get("decision_point") or "NO_ADVICE"
-    return f"[{_format_time(timestamp_seconds)}] {status}/{decision} | {action}"
+    gap = overlay.get("game_time_gap_since_previous_advice")
+    gap_text = ""
+    if isinstance(gap, (int, float)):
+        gap_text = f" gap={round(float(gap), 1)}s"
+    return f"[{_format_time(timestamp_seconds)}] {status}/{decision}{gap_text} | {action}"
 
 
 def _format_time(timestamp_seconds: int) -> str:

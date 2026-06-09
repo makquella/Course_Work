@@ -266,7 +266,7 @@ Launcher buttons:
 - `Start Backend` runs the local FastAPI backend with `USE_LLM=false`.
 - `Start Overlay` runs the existing Electron overlay from `frontend/desktop-overlay`.
 - `Install / Check Dota GSI` writes `gamestate_integration_dota_ai_coach.cfg` pointing to `http://127.0.0.1:8000/gsi`.
-- `Run Demo Replay` runs the Phantom Lancer 20-30 replay demo at `speed 10`.
+- `Run Demo Replay` runs the Phantom Lancer 20-30 replay demo at `speed 5`.
 - `Clean logs` hides repeated overlay/demo HTTP polling lines for defense; `Verbose logs` shows the full debug stream.
 - Advanced presets include Phantom Lancer 20-30 macro, Juggernaut 10-20 safety, Deep Replay Review export, `simulation_results`, and README shortcuts.
 
@@ -335,7 +335,7 @@ npm install
 npm run dev
 ```
 
-Terminal C - replay the recommended macro/farming demo. Use `--speed 10` for a live coursework defense; `--speed 20` is better for a quick pre-demo smoke test.
+Terminal C - replay the recommended macro/farming demo. Use `--speed 5` for a live coursework defense; `--speed 10` is better for a quick pre-demo smoke test. Demo speed only changes wall-clock playback; advice spacing is based on simulated Dota game time. In real live GSI mode there is no speed-up, so advice appears according to real game time.
 
 ```bash
 cd ~/Study/CourseWork/dota-ai-coach/backend
@@ -343,8 +343,8 @@ source .venv/bin/activate
 SIMULATION_USE_LLM=false \
 python3 scripts/run_overlay_demo.py \
   --simulation-file ../data/match_simulations/replay_gsi_like_match_8843382732_pl_20_30.jsonl \
-  --speed 10 \
-  --advice-hold-seconds 6
+  --speed 5 \
+  --advice-hold-seconds 8
 ```
 
 Shortcut for the same Phantom Lancer 20-30 demo:
@@ -362,8 +362,8 @@ source .venv/bin/activate
 SIMULATION_USE_LLM=false \
 python3 scripts/run_overlay_demo.py \
   --simulation-file ../data/match_simulations/replay_gsi_like_match_8843471434_jugg_10_20.jsonl \
-  --speed 10 \
-  --advice-hold-seconds 6
+  --speed 5 \
+  --advice-hold-seconds 8
 ```
 
 During playback, the overlay should show:
@@ -399,8 +399,8 @@ source .venv/bin/activate
 SIMULATION_USE_LLM=false \
 python3 scripts/run_overlay_demo.py \
   --simulation-file ../data/match_simulations/replay_gsi_like_match_8843382732_pl_20_30.jsonl \
-  --speed 10 \
-  --advice-hold-seconds 6 \
+  --speed 5 \
+  --advice-hold-seconds 8 \
   --export-summary simulation_results/demo_session_summary_pl_20_30.md \
   --export-summary-json simulation_results/demo_session_summary_pl_20_30.json
 ```
@@ -417,8 +417,8 @@ source .venv/bin/activate
 SIMULATION_USE_LLM=false \
 python3 scripts/run_overlay_demo.py \
   --simulation-file ../data/match_simulations/replay_gsi_like_match_8843382732_pl_20_30.jsonl \
-  --speed 10 \
-  --advice-hold-seconds 6 \
+  --speed 5 \
+  --advice-hold-seconds 8 \
   --export-deep-review simulation_results/deep_review_pl_20_30.md \
   --export-deep-review-json simulation_results/deep_review_pl_20_30.json
 ```
@@ -491,9 +491,9 @@ The GSI overlay uses an in-memory advice scheduler designed for about 40-50 shor
 
 Scheduling rules:
 
-- Regular advice cooldown is 45 seconds.
+- Regular coaching advice is spaced by Dota game time, normally at least 45-60 seconds apart.
 - Urgent `LOW_HP` advice uses a 15-second cooldown and can interrupt regular advice.
-- Repeated identical state advice is suppressed with a compact state hash.
+- Repeated identical state/category/action advice is suppressed with compact hashes and game-time windows.
 - `NO_ADVICE` returns no recommendation and never calls an LLM.
 - Recent lane damage can trigger `RECENT_DAMAGE_WARNING`, and low-HP overstay can trigger `OVERSTAY_WARNING`.
 - Death review advice is event-driven, bypasses normal cooldown, and stays pinned while dead or respawning.
