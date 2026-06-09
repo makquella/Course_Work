@@ -217,6 +217,12 @@ class AdviceScheduler:
         self._low_hp_pattern_last_at: datetime | None = None
         self._low_hp_episode_last_severe_signature: str | None = None
 
+    # ------------------------------------------------------------------
+    # Public API — observe_state and evaluate are the two entry points.
+    # observe_state is a lightweight state tracker used by the demo path.
+    # evaluate is the full scheduling decision, called per overlay tick.
+    # ------------------------------------------------------------------
+
     def observe_state(
         self,
         state: dict[str, Any],
@@ -701,6 +707,11 @@ class AdviceScheduler:
             game_time_gap_since_previous_advice=gap,
         )
 
+    # ------------------------------------------------------------------
+    # Public helpers — read-only or secondary entry points used by the
+    # demo path, the launcher, and debug/stats endpoints.
+    # ------------------------------------------------------------------
+
     def active_advice_for_state(
         self,
         state: dict[str, Any],
@@ -817,6 +828,12 @@ class AdviceScheduler:
                 if not self._pending_llm_tactical_hashes:
                     return
             time.sleep(0.01)
+
+    # ------------------------------------------------------------------
+    # Private locked helpers — all called under self._lock.
+    # Groups: hash tracking, suppression logic, low-HP episodes,
+    # session management, cooldown, timing, LLM refinement.
+    # ------------------------------------------------------------------
 
     def _update_hashes_locked(self, state_hash: str, tactical_hash: str) -> None:
         self.last_state_hash = state_hash

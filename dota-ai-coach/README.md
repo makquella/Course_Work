@@ -20,6 +20,10 @@ dota-ai-coach/
 │   │   ├── advice_scheduler.py     # Anti-spam, game-time spacing, active cards
 │   │   ├── advice_policy.py        # Local priority/time-window policy
 │   │   ├── advice_context.py       # Farm, HP, and position context
+│   │   ├── advice_text.py          # Advice wording templates
+│   │   ├── advice_ux_policy.py     # UX guard for advice display
+│   │   ├── coach_summary.py        # Post-session coaching summary builder
+│   │   ├── decision_points.py      # Decision point detection logic
 │   │   ├── laning_coach.py         # Laning Coach v1
 │   │   ├── post_laning_coach.py    # Post-Laning Farming Coach v1
 │   │   ├── item_timing.py          # Meaningful item timing helpers
@@ -42,9 +46,11 @@ dota-ai-coach/
 │   └── requirements.txt
 ├── data/
 │   ├── gsi_samples/                # Representative live-style GSI payloads
-│   ├── heroes/                     # hero_profiles.json
+│   ├── heroes/                     # hero_profiles.json, hero_safety_rules.json
 │   ├── match_simulations/          # selected replay/demo JSONL inputs
 │   ├── meta/                       # local metadata files
+│   ├── opendota/                   # Cached OpenDota match JSON responses
+│   ├── replays/                    # Downloaded .dem replay files
 │   ├── scenarios/                  # legacy recommend endpoint examples
 │   └── knowledge_base/             # Markdown files read by RAG
 ├── docs/
@@ -1568,11 +1574,10 @@ Then open the overlay page at `http://127.0.0.1:8000/frontend/overlay.html`.
 
 | Version | Feature |
 |---------|---------|
-| MVP-1 *(current)* | Rule-based fallback, local keyword RAG, JSON logging, minimal GSI overlay flow |
-| MVP-2 | LLM integration (Ollama / OpenAI API) to replace fallback logic |
-| MVP-3 | Embedding-based semantic RAG (sentence-transformers or similar) |
-| MVP-4 | OpenDota/STRATZ API integration for real match data |
-| MVP-5 | Full in-game overlay via Electron or browser extension |
+| MVP-1 *(current)* | Rule-based fallback, local keyword RAG, JSON logging, GSI overlay, Electron desktop overlay, LLM provider (Groq/OpenRouter/llama.cpp), replay parser, launcher |
+| MVP-2 | Embedding-based semantic RAG (sentence-transformers or similar) |
+| MVP-3 | OpenDota/STRATZ API integration for real match data |
+| MVP-4 | Full Windows packaging and installer |
 
 ---
 
