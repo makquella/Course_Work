@@ -660,6 +660,8 @@ def _build_report(
     death_route_suppressed_count = int(stats.get("death_route_suppressed_count", 0))
     repeated_low_hp_suppressed_count = int(stats.get("repeated_low_hp_suppressed_count", 0))
     suppressed_by_game_time_spacing_count = int(stats.get("suppressed_by_game_time_spacing_count", 0))
+    heartbeat_nudge_count = int(stats.get("heartbeat_nudge_count", 0))
+    suppressed_heartbeat_duplicate_count = int(stats.get("suppressed_heartbeat_duplicate_count", 0))
     source_type = _single_or_mixed(source_types)
     llm_count = int(blocking_llm_metrics["llm_call_count"] if llm_blocking else stats["llm_call_count"])
     llm_applied_count = int(
@@ -700,7 +702,10 @@ def _build_report(
         "low_hp_episode_count": int(stats.get("low_hp_episode_count", 0)),
         "repeated_low_hp_suppressed_count": repeated_low_hp_suppressed_count,
         "suppressed_by_game_time_spacing_count": suppressed_by_game_time_spacing_count,
+        "heartbeat_nudge_count": heartbeat_nudge_count,
+        "suppressed_heartbeat_duplicate_count": suppressed_heartbeat_duplicate_count,
         "min_game_time_gap_seconds": stats.get("min_game_time_gap_seconds"),
+        "max_game_time_silence_seconds": stats.get("max_game_time_silence_seconds"),
         "average_game_time_gap_seconds": stats.get("average_game_time_gap_seconds"),
         "advice_game_time_gaps_seconds": stats.get("advice_game_time_gaps_seconds", []),
         "low_hp_pattern_advice_count": int(stats.get("low_hp_pattern_advice_count", 0)),
@@ -852,7 +857,10 @@ def _print_report(
     print(f"low_hp_episode_count: {report['low_hp_episode_count']}")
     print(f"repeated_low_hp_suppressed_count: {report['repeated_low_hp_suppressed_count']}")
     print(f"suppressed_by_game_time_spacing_count: {report['suppressed_by_game_time_spacing_count']}")
+    print(f"heartbeat_nudge_count: {report['heartbeat_nudge_count']}")
+    print(f"suppressed_heartbeat_duplicate_count: {report['suppressed_heartbeat_duplicate_count']}")
     print(f"min_game_time_gap_seconds: {report['min_game_time_gap_seconds']}")
+    print(f"max_game_time_silence_seconds: {report['max_game_time_silence_seconds']}")
     print(f"average_game_time_gap_seconds: {report['average_game_time_gap_seconds']}")
     print(f"advice_game_time_gaps_seconds: {report['advice_game_time_gaps_seconds']}")
     print(f"low_hp_pattern_advice_count: {report['low_hp_pattern_advice_count']}")

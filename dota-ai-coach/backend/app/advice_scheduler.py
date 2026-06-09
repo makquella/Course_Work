@@ -110,6 +110,8 @@ COACHING_GAME_TIME_GAP_SECONDS = 45
 POST_LANING_GAME_TIME_GAP_SECONDS = 60
 SAME_ACTION_GAME_TIME_GAP_SECONDS = 120
 RECENT_SAFETY_GAME_TIME_GAP_SECONDS = 35
+HEARTBEAT_NUDGE_SECONDS = 150
+HEARTBEAT_DUPLICATE_WAIT_SECONDS = 180
 
 
 @dataclass
@@ -208,6 +210,8 @@ class AdviceScheduler:
         self._last_shown_action_hash: str | None = None
         self._advice_game_time_gaps_seconds: list[float] = []
         self.suppressed_by_game_time_spacing_count = 0
+        self.heartbeat_nudge_count = 0
+        self.suppressed_heartbeat_duplicate_count = 0
         self._low_hp_episode_active = False
         self._low_hp_episode_id = 0
         self._low_hp_episode_lowest_hp: int | None = None
@@ -560,40 +564,54 @@ class AdviceScheduler:
                 )
             )
             if suppress_post_laning:
-                if post_laning_reason == "objective_after_recent_safety":
-                    self.objective_suppressed_by_recent_safety_count += 1
-                    self.repeated_objective_suppressed_count += 1
-                elif post_laning_reason in {"duplicate_objective", "objective_context_missing"}:
-                    self.repeated_objective_suppressed_count += 1
-                elif post_laning_reason == "item_timing_after_recent_safety":
-                    self.item_timing_suppressed_by_safety_count += 1
-                elif post_laning_reason == "death_route_duplicate":
-                    self.death_route_suppressed_count += 1
-                elif post_laning_reason == "recent_safety":
-                    self.post_laning_safety_suppressed_count += 1
-                    self.repeated_post_laning_suppressed_count += 1
+                heartbeat = self._heartbeat_nudge_locked(
+                    decision_point=decision_point,
+                    state=state,
+                    recommendation=fallback,
+                    category=post_laning_category,
+                    reason=post_laning_reason,
+                    game_time_seconds=game_time_seconds,
+                )
+                if heartbeat is not None:
+                    fallback = heartbeat
+                    post_laning_category = "post_laning_safe_farm_route"
+                    post_laning_reason = None
+                    suppress_post_laning = False
                 else:
-                    self.repeated_post_laning_suppressed_count += 1
-                self.duplicate_suppressed_count += 1
-                active = self._active_result_locked(
-                    decision_point=decision_point,
-                    now=current_time,
-                    next_allowed=self._cooldown_for_type_locked(decision_point),
-                    suppressed_reason="cooldown_keep_visible",
-                )
-                if active is not None:
-                    return active
-                return self._result_locked(
-                    status="cooldown",
-                    decision_point=decision_point,
-                    recommendation=None,
-                    source="none",
-                    llm_used=False,
-                    next_allowed=self._cooldown_for_type_locked(decision_point),
-                    new_advice=False,
-                    advice_mode=ux_result["advice_mode"],
-                    suppressed_reason=post_laning_reason or "duplicate_post_laning",
-                )
+                    if post_laning_reason == "objective_after_recent_safety":
+                        self.objective_suppressed_by_recent_safety_count += 1
+                        self.repeated_objective_suppressed_count += 1
+                    elif post_laning_reason in {"duplicate_objective", "objective_context_missing"}:
+                        self.repeated_objective_suppressed_count += 1
+                    elif post_laning_reason == "item_timing_after_recent_safety":
+                        self.item_timing_suppressed_by_safety_count += 1
+                    elif post_laning_reason == "death_route_duplicate":
+                        self.death_route_suppressed_count += 1
+                    elif post_laning_reason == "recent_safety":
+                        self.post_laning_safety_suppressed_count += 1
+                        self.repeated_post_laning_suppressed_count += 1
+                    else:
+                        self.repeated_post_laning_suppressed_count += 1
+                    self.duplicate_suppressed_count += 1
+                    active = self._active_result_locked(
+                        decision_point=decision_point,
+                        now=current_time,
+                        next_allowed=self._cooldown_for_type_locked(decision_point),
+                        suppressed_reason="cooldown_keep_visible",
+                    )
+                    if active is not None:
+                        return active
+                    return self._result_locked(
+                        status="cooldown",
+                        decision_point=decision_point,
+                        recommendation=None,
+                        source="none",
+                        llm_used=False,
+                        next_allowed=self._cooldown_for_type_locked(decision_point),
+                        new_advice=False,
+                        advice_mode=ux_result["advice_mode"],
+                        suppressed_reason=post_laning_reason or "duplicate_post_laning",
+                    )
 
             spacing_remaining, spacing_gap = self._game_time_spacing_remaining_locked(
                 decision_point=decision_point,
@@ -633,6 +651,8 @@ class AdviceScheduler:
             self.advice_count += 1
             self.fallback_count += 1
             shown_category = post_laning_category or laning_category or decision_point
+            if _is_heartbeat_recommendation(fallback):
+                self.heartbeat_nudge_count += 1
             gap = self._record_shown_advice_timing_locked(
                 decision_point=decision_point,
                 state=state,
@@ -770,7 +790,10 @@ class AdviceScheduler:
                 "active_advice_until": self._active_advice_until.isoformat() if self._active_advice_until else None,
                 "is_pinned": self._is_pinned,
                 "suppressed_by_game_time_spacing_count": self.suppressed_by_game_time_spacing_count,
+                "heartbeat_nudge_count": self.heartbeat_nudge_count,
+                "suppressed_heartbeat_duplicate_count": self.suppressed_heartbeat_duplicate_count,
                 "min_game_time_gap_seconds": _minimum(self._advice_game_time_gaps_seconds),
+                "max_game_time_silence_seconds": _maximum(self._advice_game_time_gaps_seconds),
                 "average_game_time_gap_seconds": _average(self._advice_game_time_gaps_seconds),
                 "advice_game_time_gaps_seconds": list(self._advice_game_time_gaps_seconds),
             }
@@ -1399,6 +1422,84 @@ class AdviceScheduler:
             return 0, gap
         return int(max(1, round(min_gap - gap))), gap
 
+    def _heartbeat_nudge_locked(
+        self,
+        *,
+        decision_point: str,
+        state: dict[str, Any],
+        recommendation: RecommendationResponse,
+        category: str | None,
+        reason: str | None,
+        game_time_seconds: float | None,
+    ) -> RecommendationResponse | None:
+        if not self._heartbeat_allowed_locked(
+            decision_point=decision_point,
+            state=state,
+            game_time_seconds=game_time_seconds,
+        ):
+            return None
+
+        gap = max(0.0, game_time_seconds - (self._last_shown_game_time_seconds or 0.0))
+        if (
+            category
+            and category == self._last_shown_category
+            and _action_hash(recommendation.action) == self._last_shown_action_hash
+            and gap < HEARTBEAT_DUPLICATE_WAIT_SECONDS
+        ):
+            self.suppressed_heartbeat_duplicate_count += 1
+            return None
+
+        if reason in {
+            "objective_after_recent_safety",
+            "objective_context_missing",
+            "duplicate_objective",
+            "item_timing_after_recent_safety",
+            "death_route_duplicate",
+        }:
+            return None
+
+        action, reason_text, risk = _heartbeat_copy(state)
+        return RecommendationResponse(
+            action=action,
+            reason=reason_text,
+            risk=risk,
+            priority="low",
+            time_window="reassess in 60-90 seconds",
+            source="fallback",
+        )
+
+    def _heartbeat_allowed_locked(
+        self,
+        *,
+        decision_point: str,
+        state: dict[str, Any],
+        game_time_seconds: float | None,
+    ) -> bool:
+        if game_time_seconds is None or self._last_shown_game_time_seconds is None:
+            return False
+        if game_time_seconds - self._last_shown_game_time_seconds < HEARTBEAT_NUDGE_SECONDS:
+            return False
+        if _to_int(state.get("minute"), 0) < 10:
+            return False
+        if decision_point in {
+            "LOW_HP",
+            "RECENT_DAMAGE_WARNING",
+            "OVERSTAY_WARNING",
+            "BUYBACK_AVAILABLE",
+            "DISABLED_STATUS",
+            *DEATH_REVIEW_DECISIONS,
+        }:
+            return False
+        if _is_dead_or_respawning(state) or self._is_pinned:
+            return False
+        if self._last_shown_decision_point in {"LOW_HP", *DEATH_REVIEW_DECISIONS}:
+            recent_safety_gap = game_time_seconds - self._last_shown_game_time_seconds
+            if recent_safety_gap < POST_LANING_RECENT_SAFETY_WINDOW_SECONDS:
+                return False
+        if not _heartbeat_context_is_confident(state):
+            return False
+        return _heartbeat_safe_category_available(state)
+
     def _record_shown_advice_timing_locked(
         self,
         *,
@@ -1861,6 +1962,62 @@ def _low_hp_pattern_recommendation() -> RecommendationResponse:
     )
 
 
+def _heartbeat_context_is_confident(state: dict[str, Any]) -> bool:
+    confidence = str(_ctx_value(state, "context_confidence", "high") or "high").strip().lower()
+    return confidence in {"high", "medium"}
+
+
+def _heartbeat_safe_category_available(state: dict[str, Any]) -> bool:
+    if _ctx_int(state, "hp_percent", _to_int(state.get("hp_percent"), 100)) < 35:
+        return False
+    if _hp_pressure_state(state) == "critical":
+        return False
+    if _is_dead_or_respawning(state):
+        return False
+    return True
+
+
+def _heartbeat_copy(state: dict[str, Any]) -> tuple[str, str, str]:
+    hp_percent = _ctx_int(state, "hp_percent", _to_int(state.get("hp_percent"), 100))
+    mana_percent = _ctx_int(state, "mana_percent", 100)
+    hp_pressure = _hp_pressure_state(state)
+    position_risk = str(_ctx_value(state, "position_risk", "") or "").strip().lower()
+    position_zone = str(_ctx_value(state, "position_zone", "") or "").strip().lower()
+    pressure_active = hp_pressure in {"pressured_but_stable", "risky"}
+    pressure_active = pressure_active or any(
+        token in str(state.get("game_state") or "").lower()
+        for token in ("pressure", "risk", "damage")
+    )
+
+    if hp_percent <= 55 or mana_percent <= 25:
+        return (
+            "Reset resources before showing on another lane.",
+            "A short reset keeps the next farming route safer without forcing a fight.",
+            "Medium risk if you keep showing while resources are low.",
+        )
+    if position_risk == "high" or position_zone == "deep_enemy_side":
+        return (
+            "Farm closer to a safer zone until enemy positions are clearer.",
+            "Enemy locations are not confirmed, so exposed farming is unnecessary risk.",
+            "Medium risk if you stay visible in an exposed area.",
+        )
+    if pressure_active:
+        return (
+            "Avoid the pressured lane and farm a safer wave or nearby camp.",
+            "Staying in pressure can cost HP and slow your recovery.",
+            "Medium risk if you keep farming the pressured area.",
+        )
+    return (
+        "Keep farming the safest wave-and-camp route and reassess soon.",
+        "Your farm route is the safest low-risk choice while enemy locations are uncertain.",
+        "Low risk if you keep farming without forcing uncertain fights.",
+    )
+
+
+def _is_heartbeat_recommendation(recommendation: RecommendationResponse) -> bool:
+    return recommendation.priority == "low" and recommendation.time_window == "reassess in 60-90 seconds"
+
+
 def _suggests_fighting_without_safety(text: str) -> bool:
     fight_terms = ("fight", "engage", "commit", "contest", "join", "attack", "initiate")
     safety_terms = ("avoid", "retreat", "reset", "farm", "safe", "wait", "back", "skip", "only if")
@@ -2052,6 +2209,12 @@ def _minimum(values: list[float]) -> float | None:
     if not values:
         return None
     return round(min(values), 3)
+
+
+def _maximum(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return round(max(values), 3)
 
 
 def _p95(values: list[float]) -> float | None:

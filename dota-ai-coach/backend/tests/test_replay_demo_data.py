@@ -39,3 +39,32 @@ def test_short_demo_playback_path_does_not_crash(client, repo_root):
         )
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
+
+
+def test_pl_20_30_demo_spacing_stays_useful_without_spam(client, repo_root):
+    path = repo_root / "data" / "match_simulations" / DEMO_FILES[0]
+    shown = []
+
+    for row in _jsonl_rows(path):
+        response = client.post(
+            "/demo/replay-state",
+            json={
+                "timestamp_seconds": row["timestamp_seconds"],
+                "state": row["state"],
+                "simulation_file": str(path),
+                "speed": 5,
+            },
+        )
+        assert response.status_code == 200
+        overlay = response.json()["overlay"]
+        if overlay.get("new_advice"):
+            shown.append(overlay)
+
+    stats = client.get("/overlay/stats").json()
+    assert 5 <= len(shown) <= 8
+    assert stats["heartbeat_nudge_count"] >= 1
+    assert stats["max_game_time_silence_seconds"] <= 180
+    for advice in shown[1:]:
+        gap = advice["game_time_gap_since_previous_advice"]
+        if advice["decision_point"] != "LOW_HP":
+            assert gap >= 45
