@@ -108,6 +108,8 @@ REVIEW_FIELDS = [
     "decision_point",
     "action_type",
     "advice_mode",
+    "game_time_gap_since_previous_advice",
+    "suppressed_by_game_time_spacing",
     "source",
     "llm_used",
     "fallback_used",
@@ -577,6 +579,10 @@ def _build_review_row(
         "decision_point": decision_point,
         "action_type": action_type,
         "advice_mode": result.advice_mode,
+        "game_time_gap_since_previous_advice": (
+            "" if result.game_time_gap_since_previous_advice is None else result.game_time_gap_since_previous_advice
+        ),
+        "suppressed_by_game_time_spacing": result.suppressed_by_game_time_spacing,
         "source": source,
         "llm_used": llm_used,
         "fallback_used": recommendation is not None and (result.source == "fallback" or llm_applied),
@@ -653,6 +659,7 @@ def _build_report(
     item_timing_suppressed_by_safety_count = int(stats.get("item_timing_suppressed_by_safety_count", 0))
     death_route_suppressed_count = int(stats.get("death_route_suppressed_count", 0))
     repeated_low_hp_suppressed_count = int(stats.get("repeated_low_hp_suppressed_count", 0))
+    suppressed_by_game_time_spacing_count = int(stats.get("suppressed_by_game_time_spacing_count", 0))
     source_type = _single_or_mixed(source_types)
     llm_count = int(blocking_llm_metrics["llm_call_count"] if llm_blocking else stats["llm_call_count"])
     llm_applied_count = int(
@@ -692,6 +699,10 @@ def _build_report(
         "death_route_suppressed_count": death_route_suppressed_count,
         "low_hp_episode_count": int(stats.get("low_hp_episode_count", 0)),
         "repeated_low_hp_suppressed_count": repeated_low_hp_suppressed_count,
+        "suppressed_by_game_time_spacing_count": suppressed_by_game_time_spacing_count,
+        "min_game_time_gap_seconds": stats.get("min_game_time_gap_seconds"),
+        "average_game_time_gap_seconds": stats.get("average_game_time_gap_seconds"),
+        "advice_game_time_gaps_seconds": stats.get("advice_game_time_gaps_seconds", []),
         "low_hp_pattern_advice_count": int(stats.get("low_hp_pattern_advice_count", 0)),
         "urgent_advice_count": advice_modes["urgent"],
         "coaching_advice_count": advice_modes["coaching"],
@@ -768,8 +779,8 @@ def _write_review_markdown(rows: list[dict[str, Any]], timestamp: str) -> Path:
     lines = [
         "# Match Advice Review",
         "",
-        "| # | Time | Hero | Decision point | Lane category | Post-laning category | Low HP episode | Low HP repeats suppressed | Post-laning repeats suppressed | Objective repeats suppressed | Mode | Source | Confidence | Farm | HP pressure | Position | Missing signals | Team | Fight | Objective | Context | Action | Reason | Priority | Rating | Comment |",
-        "|---|---|---|---|---|---|---:|---:|---:|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| # | Time | Hero | Decision point | Lane category | Post-laning category | Low HP episode | Gap since previous advice | Low HP repeats suppressed | Post-laning repeats suppressed | Objective repeats suppressed | Mode | Source | Confidence | Farm | HP pressure | Position | Missing signals | Team | Fight | Objective | Context | Action | Reason | Priority | Rating | Comment |",
+        "|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         lines.append(
@@ -783,6 +794,7 @@ def _write_review_markdown(rows: list[dict[str, Any]], timestamp: str) -> Path:
                     _md_cell(row["laning_category"]),
                     _md_cell(row["post_laning_category"]),
                     _md_cell(row["low_hp_episode_id"]),
+                    _md_cell(row["game_time_gap_since_previous_advice"]),
                     _md_cell(row["repeated_low_hp_suppressed_count"]),
                     _md_cell(row["repeated_post_laning_suppressed_count"]),
                     _md_cell(row["repeated_objective_suppressed_count"]),
@@ -839,6 +851,10 @@ def _print_report(
     print(f"death route suppressed count: {report['death_route_suppressed_count']}")
     print(f"low_hp_episode_count: {report['low_hp_episode_count']}")
     print(f"repeated_low_hp_suppressed_count: {report['repeated_low_hp_suppressed_count']}")
+    print(f"suppressed_by_game_time_spacing_count: {report['suppressed_by_game_time_spacing_count']}")
+    print(f"min_game_time_gap_seconds: {report['min_game_time_gap_seconds']}")
+    print(f"average_game_time_gap_seconds: {report['average_game_time_gap_seconds']}")
+    print(f"advice_game_time_gaps_seconds: {report['advice_game_time_gaps_seconds']}")
     print(f"low_hp_pattern_advice_count: {report['low_hp_pattern_advice_count']}")
     print(f"urgent advice count: {report['urgent_advice_count']}")
     print(f"coaching advice count: {report['coaching_advice_count']}")

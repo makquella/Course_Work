@@ -64,8 +64,8 @@ FALLBACK_TEXT = {
         "risk": "High risk if you try to force action while disabled.",
     },
     "check_buyback_value": {
-        "action": "Check buyback value only for base defense or a major objective.",
-        "reason": "Buying back for a low-value fight can lose the next timing.",
+        "action": "Buyback is available. Only consider it for critical defense.",
+        "reason": "Use it only if your team is defending a critical objective or the game could be decided now.",
         "risk": "High risk if buyback is spent without protecting an objective or base.",
     },
     "prepare_next_move": {

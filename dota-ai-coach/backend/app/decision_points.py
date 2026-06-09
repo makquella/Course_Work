@@ -330,6 +330,18 @@ def detect_decision_point(state: Mapping[str, Any] | None) -> DecisionPoint:
         return "NO_ADVICE"
 
     if not alive_bool or respawn_seconds > 0:
+        if _has_conservative_buyback_context(
+            state,
+            minute=minute,
+            respawn_seconds=respawn_seconds,
+            buyback_cost=buyback_cost,
+            buyback_cooldown=buyback_cooldown,
+            available_gold=available_gold,
+            near_objective=near_objective,
+            team_status=team_status,
+            objective_for_selected_team=objective_for_selected_team,
+        ):
+            return "BUYBACK_AVAILABLE"
         extra_context = _extra_context(state)
         replay_death_decision = str(extra_context.get("death_review_decision") or "")
         if replay_death_decision in DEATH_DECISION_POINTS:
@@ -431,3 +443,46 @@ def detect_decision_point(state: Mapping[str, Any] | None) -> DecisionPoint:
         return "SAFE_FARMING"
 
     return "NO_ADVICE"
+
+
+def _has_conservative_buyback_context(
+    state: Mapping[str, Any],
+    *,
+    minute: int,
+    respawn_seconds: int,
+    buyback_cost: int,
+    buyback_cooldown: int,
+    available_gold: int,
+    near_objective: bool,
+    team_status: str,
+    objective_for_selected_team: Any,
+) -> bool:
+    buyback_available = _ctx_bool(state, "buyback_available") or (
+        buyback_cost > 0
+        and buyback_cooldown == 0
+        and available_gold >= buyback_cost
+    )
+    if not buyback_available:
+        return False
+
+    text = _state_text(state)
+    critical_context = any(
+        keyword in text
+        for keyword in (
+            "highground",
+            "base",
+            "ancient",
+            "barracks",
+            "throne",
+            "roshan",
+            "objective",
+            "defense",
+        )
+    )
+    if minute >= 35 and (respawn_seconds >= 35 or critical_context):
+        return True
+    if critical_context and respawn_seconds >= 45:
+        return True
+    if near_objective and team_status == "disadvantage":
+        return True
+    return objective_for_selected_team is False and (near_objective or critical_context)

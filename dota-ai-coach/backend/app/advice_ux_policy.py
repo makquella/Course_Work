@@ -135,6 +135,8 @@ def _coaching_action(action: str) -> str:
         return action
     if lowered.startswith("recover"):
         return action
+    if lowered.startswith("buyback is available"):
+        return action
     if lowered.startswith("only consider"):
         return action
     if lowered.startswith("you reached"):

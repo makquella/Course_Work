@@ -1,10 +1,10 @@
 # Dota AI Coach
 
-A prototype AI coach for **Dota 2 carry players**.
+A coursework prototype AI coach for **Dota 2 carry players**.
 
-The system accepts a structured description of a game situation, validates it, retrieves relevant context from a local Markdown knowledge base, applies a rule-based fallback recommendation engine, and logs everything to disk. It can also receive Dota 2 Game State Integration (GSI) updates for a minimal browser overlay flow.
+The system receives live Dota 2 Game State Integration (GSI) updates or offline GSI-like replay states, normalizes them, applies deterministic rule-based carry coaching, schedules advice through an anti-spam layer, and shows compact advice in a desktop overlay. Optional LLM providers can improve wording during offline evaluation or controlled demos, but local rule-based policy remains authoritative for live decisions.
 
-> **Status: MVP-1** — safe abstract carry advice with rule-based fallback, GSI overlay support, and optional LLM wording refinement. No OpenDota, STRATZ, database, memory reading, screen scraping, or automation.
+> **Status: coursework MVP** — FastAPI backend, live GSI endpoint, deterministic realtime recommender, game-time based scheduler, Electron desktop overlay, launcher UI, replay parser/converter, replay demo playback, live session recorder, simulation/evaluation scripts, and Windows packaging Phase 1. The project does not read game memory, does not read the screen, does not automate input, does not inject into Dota 2, and does not use STRATZ or a database.
 
 ---
 
@@ -14,36 +14,114 @@ The system accepts a structured description of a game situation, validates it, r
 dota-ai-coach/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py          # FastAPI app and route handlers
-│   │   ├── schemas.py       # Pydantic request/response models
-│   │   ├── advice_policy.py # Universal carry advice policy
-│   │   ├── recommender.py   # Rule-based fallback recommendation wording
-│   │   ├── decision_points.py  # Overlay decision-point detection
-│   │   ├── gsi_state.py        # In-memory GSI state normalization
-│   │   ├── rag.py           # Keyword-overlap retrieval from knowledge base
-│   │   ├── logger.py        # Per-request JSON log writer
-│   │   └── config.py        # Paths and constants
-│   ├── logs/                # Auto-created; one JSON file per request
+│   │   ├── main.py                 # FastAPI app, GSI/demo/overlay endpoints
+│   │   ├── gsi_state.py            # Live GSI normalization
+│   │   ├── recommender.py          # Rule-based fallback wording
+│   │   ├── advice_scheduler.py     # Anti-spam, game-time spacing, active cards
+│   │   ├── advice_policy.py        # Local priority/time-window policy
+│   │   ├── advice_context.py       # Farm, HP, and position context
+│   │   ├── laning_coach.py         # Laning Coach v1
+│   │   ├── post_laning_coach.py    # Post-Laning Farming Coach v1
+│   │   ├── item_timing.py          # Meaningful item timing helpers
+│   │   ├── hero_profiles.py        # Data-driven hero profile loader
+│   │   ├── hero_safety.py          # Hero survivability checks
+│   │   ├── signal_capabilities.py  # Source-specific signal availability
+│   │   ├── match_memory.py         # In-memory live match/death memory
+│   │   ├── live_session_recorder.py # Local GSI session recorder
+│   │   ├── deep_replay_review.py   # Offline replay review artifact builder
+│   │   ├── llm_provider.py         # Optional Groq/llama.cpp/OpenRouter calls
+│   │   ├── schemas.py              # Pydantic request/response models
+│   │   ├── rag.py                  # Keyword-overlap knowledge retrieval
+│   │   ├── logger.py               # Per-request JSON log writer
+│   │   └── config.py               # Paths and settings
+│   ├── scripts/                    # Simulation, replay, demo, comparison tools
+│   ├── tests/                      # pytest API/GSI/scheduler/recorder tests
+│   ├── replay_tools/clarity/       # Offline Clarity helper project
+│   ├── packaging/                  # PyInstaller Phase 1 backend specs
+│   ├── logs/                       # Auto-created; local request logs
 │   └── requirements.txt
 ├── data/
-│   ├── knowledge_base/      # Markdown files read by the RAG module
-│   │   ├── carry_principles.md
-│   │   ├── heroes.md
-│   │   └── items.md
-│   └── scenarios/           # Sample JSON inputs for manual testing
-│       ├── antimage_14min_pressure.json
-│       ├── juggernaut_low_hp.json
-│       └── luna_farm_or_fight.json
+│   ├── gsi_samples/                # Representative live-style GSI payloads
+│   ├── heroes/                     # hero_profiles.json
+│   ├── match_simulations/          # selected replay/demo JSONL inputs
+│   ├── meta/                       # local metadata files
+│   ├── scenarios/                  # legacy recommend endpoint examples
+│   └── knowledge_base/             # Markdown files read by RAG
 ├── docs/
-├── frontend/                # Minimal browser UI for POST /recommend
-│   ├── index.html
-│   ├── overlay.html
-│   ├── styles.css
-│   └── script.js
+│   ├── ADVICE_SCHEDULER.md
+│   └── PACKAGING_WINDOWS.md
+├── frontend/
+│   ├── index.html / overlay.html   # legacy simple debug/fallback frontend
+│   ├── desktop-overlay/            # Electron always-on-top overlay
+│   └── launcher/                   # Electron launcher for defense/demo
+├── scripts/                        # project-level demo shell helpers
+├── AUTHORS.md
+├── LICENSE
 └── README.md
 ```
 
 ---
+
+## Project status and safety limits
+
+- Realtime advice is rule-based and deterministic.
+- LLM is optional and is not required for live decisions.
+- The local policy controls `priority` and `time_window`; LLM wording cannot override those fields.
+- Live mode only reads local HTTP GSI updates from Dota 2.
+- Backend CORS is local-only for `localhost` / `127.0.0.1` development and packaged launcher/overlay access.
+- The system does not read memory, does not read the screen, does not automate input, and does not inject into Dota 2.
+- Live GSI provides limited signals. Exact enemy positions, nearby ally/enemy counts, exact teamfight context, exact team readiness, and exact Roshan/objective context are unavailable unless explicitly present in the input.
+- Offline replay-derived advice is conservative because the minimal Clarity helper cannot reconstruct every live GSI signal.
+- This is a prototype/MVP for coursework defense, not a production coaching product.
+
+## Testing
+
+Run the backend test suite and compile checks:
+
+```bash
+cd backend
+source .venv/bin/activate
+pytest -q
+python3 -m compileall -q app scripts packaging tests
+```
+
+Optional explicit test path:
+
+```bash
+pytest -q backend/tests
+```
+
+From the project root, also run:
+
+```bash
+git diff --check
+node --check frontend/launcher/main.js
+node --check frontend/launcher/preload.js
+node --check frontend/launcher/renderer/app.js
+node --check frontend/desktop-overlay/main.js
+node --check frontend/desktop-overlay/preload.js
+node --check frontend/desktop-overlay/renderer/app.js
+```
+
+## How this project was tested
+
+- Unit/API tests with `pytest` and FastAPI `TestClient`.
+- GSI sample parsing tests for representative live payloads.
+- Advice behavior tests for low HP, low farm, duplicate suppression, game-time spacing, and urgent LOW_HP interrupts.
+- Replay-derived JSONL sanity tests for launcher demo files.
+- Live session recorder tests using `tmp_path`.
+- Offline replay simulations and review exports.
+- Manual launcher/desktop overlay tests for defense demo playback.
+- Planned real Dota live test via GSI recording.
+
+## Authorship and license
+
+- Author: Artem / makquella
+- Project: Dota AI Coach coursework prototype
+- Year: 2026
+- License: MIT, see [LICENSE](LICENSE).
+
+Dota 2 is a trademark/game by Valve. This project is an educational prototype and is not affiliated with Valve.
 
 ## Quick Start
 
@@ -497,6 +575,7 @@ Scheduling rules:
 - `NO_ADVICE` returns no recommendation and never calls an LLM.
 - Recent lane damage can trigger `RECENT_DAMAGE_WARNING`, and low-HP overstay can trigger `OVERSTAY_WARNING`.
 - Death review advice is event-driven, bypasses normal cooldown, and stays pinned while dead or respawning.
+- `BUYBACK_AVAILABLE` is conservative: it appears only when the hero is dead, buyback is available, and late-game/base/objective context is serious enough. It does not tell the player to buy back aggressively.
 - The last useful card stays visible during cooldown as `active_advice` instead of being replaced by empty monitoring.
 - During laning, soft status states return `monitoring` with `Monitoring lane — no urgent advice.` instead of a full card.
 - During cooldown, the overlay response includes `message: "Monitoring..."` so the desktop overlay stays visibly alive without flashing advice.

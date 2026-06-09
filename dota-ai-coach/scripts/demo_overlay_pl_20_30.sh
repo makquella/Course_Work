@@ -11,5 +11,5 @@ fi
 SIMULATION_USE_LLM=false \
 python3 scripts/run_overlay_demo.py \
   --simulation-file ../data/match_simulations/replay_gsi_like_match_8843382732_pl_20_30.jsonl \
-  --speed 10 \
-  --advice-hold-seconds 6
+  --speed 5 \
+  --advice-hold-seconds 8

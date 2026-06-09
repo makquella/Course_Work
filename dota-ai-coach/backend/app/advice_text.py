@@ -44,7 +44,7 @@ ACTION_REPLACEMENTS = {
     "play_around_timing": "You reached a timing; reassess whether to pressure or keep farming safely.",
     "conserve_mana_or_reset": "Conserve mana or reset before taking a fight.",
     "wait_out_disable": "Wait out the disable and avoid forcing actions.",
-    "check_buyback_value": "Check buyback value only for base defense or a major objective.",
+    "check_buyback_value": "Buyback is available. Only consider it for critical defense.",
     "prepare_next_move": "Use the respawn time to plan your next safe farming route.",
     "stay_hidden_until_team_ready": "Stay hidden until your team is ready to make a move.",
     "respect_hero_safety_window": "Respect your hero's safety window before forcing a fight.",

@@ -1,8 +1,28 @@
 """
 advice_scheduler.py - in-memory live advice scheduling for the GSI overlay.
 
+Purpose:
+- accept normalized live/demo state plus a decision point;
+- return either a new visible advice card, the still-active previous card, or a
+  compact status/cooldown response;
+- keep realtime coaching useful without spamming the player.
+
+The scheduler does not choose high-level game meaning by itself. Decision
+selection comes from ``decision_points.py`` and wording comes from the
+fallback recommender or optional LLM refinement. This module owns the display
+contract: game-time spacing, duplicate suppression, active-card lifetime,
+urgent interrupts, low-HP episode handling, death pinning, objective/card
+suppression, and accounting metrics.
+
+Timing distinction:
+- decision frequency and duplicate suppression use Dota game_time / simulated
+  replay time when available;
+- wall-clock time is kept for UI visibility, async LLM staleness, and ordinary
+  HTTP polling.
+
 The overlay should get immediate rule-based advice. Optional LLM refinement runs
-in the background and is discarded if the GSI state changes before it arrives.
+in the background and is discarded if the tactical state changes before it
+arrives.
 """
 
 from __future__ import annotations
