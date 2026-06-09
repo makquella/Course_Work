@@ -16,6 +16,11 @@ def log_recommendation(
     request: GameSituationRequest,
     rag_context: list[str],
     response: RecommendationResponse,
+    decision_point: str | None = None,
+    provider: str = "fallback",
+    model: str | None = None,
+    llm_error: str | None = None,
+    fallback_reason: str | None = None,
 ) -> Path:
     """
     Persist a single request/response pair as a JSON file.
@@ -31,9 +36,17 @@ def log_recommendation(
     log_entry = {
         "timestamp": timestamp,
         "input": request.model_dump(),
+        "decision_point": decision_point,
         "rag_context": rag_context,
+        "provider": provider,
+        "model": model,
+        "source": response.source,
         "output": response.model_dump(),
     }
+    if llm_error:
+        log_entry["llm_error"] = llm_error
+    if fallback_reason:
+        log_entry["fallback_reason"] = fallback_reason
 
     log_path = LOGS_DIR / filename
     log_path.write_text(json.dumps(log_entry, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -14,6 +14,7 @@
         --border: #cfd8df;
         --primary: #216a5b;
         --warn: #9b4a1f;
+        --danger: #9f1f17;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
@@ -57,6 +58,56 @@
         margin: 0;
         font-size: 0.95rem;
         line-height: 1.2;
+      }
+
+      .mode {
+        margin: 0 0 6px;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .action-text {
+        margin: 0 0 8px;
+        color: var(--text);
+        font-size: 1.05rem;
+        font-weight: 800;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+
+      .reason-text {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      .status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin: 0 0 8px;
+      }
+
+      .status-chip {
+        padding: 2px 6px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      .risk-text {
+        margin: 8px 0 0;
+        color: var(--warn);
+        font-size: 0.75rem;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
       }
 
       .badge {
@@ -104,7 +155,7 @@
       }
 
       .priority-high {
-        color: #9f1f17;
+        color: var(--danger);
       }
 
       .priority-medium {
@@ -113,6 +164,16 @@
 
       .hidden {
         display: none;
+      }
+
+      @media (max-height: 190px) {
+        .risk-text {
+          display: none;
+        }
+
+        .card {
+          padding: 12px;
+        }
       }
     </style>
   </head>
@@ -129,24 +190,11 @@
           <span id="priority-badge" class="badge hidden"></span>
         </div>
 
-        <dl id="recommendation">
-          <div>
-            <dt>Action</dt>
-            <dd id="action"></dd>
-          </div>
-          <div>
-            <dt>Reason</dt>
-            <dd id="reason"></dd>
-          </div>
-          <div>
-            <dt>Risk</dt>
-            <dd id="risk"></dd>
-          </div>
-          <div>
-            <dt>Time window</dt>
-            <dd id="time-window"></dd>
-          </div>
-        </dl>
+        <p id="advice-mode" class="mode">Status</p>
+        <div id="status-row" class="status-row hidden" aria-label="Live hero status"></div>
+        <p id="action" class="action-text"></p>
+        <p id="reason" class="reason-text"></p>
+        <p id="risk" class="risk-text"></p>
         <p id="card-updated" class="updated">Last updated: --</p>
       </section>
     </main>
@@ -158,11 +206,12 @@
       const recommendationCard = document.querySelector("#recommendation-card");
       const cardUpdated = document.querySelector("#card-updated");
       const priorityBadge = document.querySelector("#priority-badge");
+      const adviceMode = document.querySelector("#advice-mode");
+      const statusRow = document.querySelector("#status-row");
       const fields = {
         action: document.querySelector("#action"),
         reason: document.querySelector("#reason"),
-        risk: document.querySelector("#risk"),
-        time_window: document.querySelector("#time-window")
+        risk: document.querySelector("#risk")
       };
 
       refreshRecommendation();
@@ -180,22 +229,32 @@
 
       function renderOverlay(data) {
         if (data.status === "waiting_for_gsi") {
-          showStatus("Waiting for Dota 2 GSI...", data.timestamp);
+          showStatus("Waiting for Dota 2 GSI...", data.last_updated);
+          return;
+        }
+
+        if (data.status === "unsupported_hero") {
+          showStatus("Hero not supported yet", data.last_updated);
+          return;
+        }
+
+        if (data.status === "monitoring") {
+          showStatus(data.message || "Monitoring lane - no urgent advice.", data.last_updated);
           return;
         }
 
         if (data.status === "invalid_state") {
-          showStatus("GSI state received, but it cannot be used for advice yet.", data.timestamp);
+          showStatus("GSI state received, but it cannot be used for advice yet.", data.last_updated);
           return;
         }
 
         if (data.status === "cooldown" && !data.recommendation) {
-          showStatus("Advice cooldown active.", data.timestamp);
+          showStatus(statusMessage(data), data.last_updated);
           return;
         }
 
         if (!data.recommendation) {
-          showStatus("No urgent advice", data.timestamp);
+          showStatus(statusMessage(data), data.last_updated);
           return;
         }
 
@@ -204,10 +263,12 @@
           fields[field].textContent = recommendation[field] || "";
         }
 
+        adviceMode.textContent = data.advice_mode || "coaching";
+        renderStatusRow(data);
         priorityBadge.textContent = recommendation.priority || "fallback";
         priorityBadge.className = `badge priority-${recommendation.priority || "low"}`;
         priorityBadge.classList.remove("hidden");
-        cardUpdated.textContent = formatUpdated(data.timestamp);
+        cardUpdated.textContent = `${formatUpdated(data.last_updated)} | ${data.source || "fallback"} | #${data.advice_count || 0}`;
         statusPanel.classList.add("hidden");
         recommendationCard.classList.remove("hidden");
       }
@@ -218,6 +279,81 @@
         statusPanel.classList.remove("hidden");
         recommendationCard.classList.add("hidden");
         priorityBadge.classList.add("hidden");
+        statusRow.classList.add("hidden");
+        statusRow.replaceChildren();
+      }
+
+      function statusMessage(data) {
+        if (data.suppressed_reason === "rate_limit") {
+          return "Advice paused to avoid overload.";
+        }
+        if (data.suppressed_reason === "duplicate") {
+          return "No new advice.";
+        }
+        if (data.suppressed_reason === "cooldown") {
+          if (data.message) {
+            return data.message;
+          }
+          const wait = data.next_allowed_advice_in_seconds || 0;
+          return `Advice cooldown active. Next check in ${wait}s.`;
+        }
+        return "No urgent advice";
+      }
+
+      function renderStatusRow(data) {
+        const chips = [];
+        if (Number.isFinite(data.hp_percent)) {
+          chips.push(`HP ${data.hp_percent}%`);
+        }
+        if (Number.isFinite(data.mana_percent)) {
+          chips.push(`Mana ${data.mana_percent}%`);
+        }
+        if (data.gpm !== null && data.gpm !== undefined) {
+          chips.push(`GPM ${data.gpm}`);
+        }
+        if (data.last_hits !== null && data.last_hits !== undefined) {
+          chips.push(`LH ${data.last_hits}`);
+        }
+        if (data.alive === false) {
+          chips.push(`Dead ${data.respawn_seconds || 0}s`);
+        }
+        if (data.smoked) {
+          chips.push("Smoked");
+        }
+        if (data.buyback_available) {
+          chips.push("Buyback");
+        }
+        if (data.match_death_count) {
+          chips.push(`Deaths ${data.match_death_count}`);
+        }
+        if (data.recent_death_pattern) {
+          chips.push(String(data.recent_death_pattern).toLowerCase().replaceAll("_", " "));
+        }
+        if (data.hero_risk_level && data.hero_risk_level !== "low") {
+          chips.push(`Hero risk ${data.hero_risk_level}`);
+        }
+        if (Array.isArray(data.hero_safety_flags) && data.hero_safety_flags.length) {
+          chips.push(String(data.hero_safety_flags[0]).replaceAll("_", " "));
+        }
+        if (Array.isArray(data.status_effects)) {
+          for (const effect of data.status_effects) {
+            chips.push(String(effect));
+          }
+        }
+
+        statusRow.replaceChildren();
+        if (!chips.length) {
+          statusRow.classList.add("hidden");
+          return;
+        }
+
+        for (const chip of chips.slice(0, 8)) {
+          const item = document.createElement("span");
+          item.className = "status-chip";
+          item.textContent = chip;
+          statusRow.appendChild(item);
+        }
+        statusRow.classList.remove("hidden");
       }
 
       function formatUpdated(timestamp) {

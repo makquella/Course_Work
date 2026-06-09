@@ -1,4 +1,5 @@
 const API_URL = "http://127.0.0.1:8000/recommend";
+const REQUEST_TIMEOUT_MS = 35000;
 
 const presets = {
   antimage: {
@@ -66,15 +67,19 @@ presetButtons.forEach((button) => {
 recommendButton.addEventListener("click", async () => {
   clearMessages();
   setLoading(true);
+  let timeoutId;
 
   try {
     const payload = parseScenario();
+    const controller = new AbortController();
+    timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const response = await fetch(API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
 
     const data = await readJsonResponse(response);
@@ -85,6 +90,14 @@ recommendButton.addEventListener("click", async () => {
 
     showRecommendation(data);
   } catch (error) {
+    if (error.name === "AbortError") {
+      showError(
+        "The backend took too long to respond.",
+        `Request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)} seconds.`
+      );
+      return;
+    }
+
     if (error instanceof TypeError) {
       showError(
         "Could not reach the backend. Make sure FastAPI is running at http://127.0.0.1:8000.",
@@ -98,6 +111,9 @@ recommendButton.addEventListener("click", async () => {
       error.details ?? error.message
     );
   } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
     setLoading(false);
   }
 });
