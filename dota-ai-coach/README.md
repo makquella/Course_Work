@@ -253,6 +253,7 @@ git diff --check
 - [Quickstart](docs/QUICKSTART.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Replay Demo](docs/REPLAY_DEMO.md)
+- [Analogues and Differentiation](docs/ANALOGS.md)
 - [Live GSI Test Report](docs/LIVE_GSI_TEST_REPORT.md)
 - [Reference Commands](docs/REFERENCE_COMMANDS.md)
 - [Roadmap](docs/ROADMAP.md)

@@ -4,7 +4,6 @@ advice_ux_policy.py - cognitive load guard for overlay advice.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
 

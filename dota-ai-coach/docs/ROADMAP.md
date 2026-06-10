@@ -6,6 +6,8 @@ Coursework MVP / v0.1.0.
 
 The project demonstrates a local real-time Dota 2 coaching loop using live GSI, deterministic rule-based advice, scheduler-based anti-spam, an Electron overlay, an Electron launcher, replay demo playback, and live session recording.
 
+For the analogue/comparison analysis, see [Analogues and Differentiation](ANALOGS.md).
+
 ## Implemented
 
 - FastAPI backend.
