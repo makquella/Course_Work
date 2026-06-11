@@ -5,13 +5,15 @@ const path = require("node:path");
 const WINDOW_WIDTH = 420;
 const WINDOW_HEIGHT = 140;
 const CONFIG_PATH = path.join(__dirname, "overlay.config.json");
+const ALWAYS_ON_TOP_LEVEL = "screen-saver";
+const ENFORCE_ALWAYS_ON_TOP_MS = 2500;
 
 const DEFAULT_CONFIG = {
   backendUrl: "http://127.0.0.1:8000",
   pollIntervalMs: 1000,
   positionPreset: "right-center",
   locked: true,
-  debugVisible: true,
+  debugVisible: false,
   opacity: 0.92,
   autoHideMs: 8000,
   urgentAutoHideMs: 12000
@@ -21,6 +23,7 @@ let overlayWindow = null;
 let config = loadConfig();
 let overlayVisible = true;
 let moveSaveTimer = null;
+let alwaysOnTopTimer = null;
 
 function loadConfig() {
   try {
@@ -59,16 +62,25 @@ function createWindow() {
   });
 
   overlayWindow.setOpacity(Number(config.opacity) || DEFAULT_CONFIG.opacity);
-  overlayWindow.setAlwaysOnTop(true, "screen-saver");
-  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  enforceAlwaysOnTop();
   moveToPreset(config.positionPreset || "right-center", false);
   applyLockedMode();
 
   overlayWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   overlayWindow.once("ready-to-show", () => {
+    enforceAlwaysOnTop();
     if (overlayVisible) {
       overlayWindow.showInactive();
+      enforceAlwaysOnTop();
     }
+  });
+
+  overlayWindow.on("show", enforceAlwaysOnTop);
+  overlayWindow.on("restore", enforceAlwaysOnTop);
+  overlayWindow.on("hide", updateAlwaysOnTopTimer);
+  overlayWindow.on("closed", () => {
+    overlayWindow = null;
+    updateAlwaysOnTopTimer();
   });
 
   overlayWindow.on("move", () => {
@@ -83,6 +95,34 @@ function createWindow() {
       saveConfig();
     }, 250);
   });
+  updateAlwaysOnTopTimer();
+}
+
+function enforceAlwaysOnTop(options = {}) {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return;
+  }
+  if (!overlayVisible && !options.force) {
+    return;
+  }
+  if (overlayWindow.isMinimized() && overlayVisible) {
+    overlayWindow.restore();
+  }
+  overlayWindow.setAlwaysOnTop(true, ALWAYS_ON_TOP_LEVEL);
+  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  overlayWindow.moveTop();
+}
+
+function updateAlwaysOnTopTimer() {
+  clearInterval(alwaysOnTopTimer);
+  alwaysOnTopTimer = null;
+  if (!overlayWindow || overlayWindow.isDestroyed() || !overlayVisible) {
+    return;
+  }
+  alwaysOnTopTimer = setInterval(enforceAlwaysOnTop, ENFORCE_ALWAYS_ON_TOP_MS);
+  if (typeof alwaysOnTopTimer.unref === "function") {
+    alwaysOnTopTimer.unref();
+  }
 }
 
 function applyLockedMode() {
@@ -136,10 +176,13 @@ function toggleVisibility() {
   }
   overlayVisible = !overlayVisible;
   if (overlayVisible) {
+    enforceAlwaysOnTop();
     overlayWindow.showInactive();
+    enforceAlwaysOnTop();
   } else {
     overlayWindow.hide();
   }
+  updateAlwaysOnTopTimer();
 }
 
 function toggleLocked() {
@@ -221,15 +264,21 @@ ipcMain.handle("overlay:fetch-recommendation", async (_event, backendUrl) => {
 app.whenReady().then(() => {
   createWindow();
   registerShortcuts();
+  screen.on("display-added", enforceAlwaysOnTop);
+  screen.on("display-removed", enforceAlwaysOnTop);
+  screen.on("display-metrics-changed", enforceAlwaysOnTop);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    } else {
+      enforceAlwaysOnTop();
     }
   });
 });
 
 app.on("will-quit", () => {
+  clearInterval(alwaysOnTopTimer);
   globalShortcut.unregisterAll();
 });
 

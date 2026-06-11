@@ -8,6 +8,7 @@
     "dev": "electron .",
     "start": "electron .",
     "pack": "electron-builder --dir",
+    "dist:unpacked": "electron-builder --dir",
     "dist": "electron-builder --win portable"
   },
   "devDependencies": {

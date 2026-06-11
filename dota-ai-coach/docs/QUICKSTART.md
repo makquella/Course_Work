@@ -61,6 +61,13 @@ npm install
 npm run dev
 ```
 
+On Fedora/GNOME Wayland, normal `npm run dev` may not keep the overlay always-on-top. For more reliable overlay testing through X11/XWayland, use:
+
+```bash
+cd ~/Study/CourseWork/dota-ai-coach/frontend/desktop-overlay
+npm run dev:x11
+```
+
 The overlay polls:
 
 ```text

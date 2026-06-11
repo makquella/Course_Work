@@ -1,17 +1,28 @@
 :root {
   color-scheme: dark;
-  --bg: #0d1118;
-  --panel: rgba(24, 30, 42, 0.94);
-  --panel-border: rgba(142, 161, 190, 0.2);
-  --text: #f4f7fb;
-  --muted: #aab5c6;
-  --accent: #76c7ff;
-  --good: #7bd88f;
-  --warn: #f6c177;
-  --bad: #ff7b89;
-  --button: #25415f;
-  --button-hover: #315577;
-  --secondary: #202a39;
+  --bg: #111215;
+  --bg-elevated: #16171b;
+  --panel: #1a1b20;
+  --panel-strong: #202127;
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --panel-border-strong: rgba(0, 240, 255, 0.2);
+  --text: #f5f7fa;
+  --text-soft: #e0e0e0;
+  --muted: #9ca3af;
+  --muted-dim: #888888;
+  --cyan: #00f0ff;
+  --purple: #6a1b9a;
+  --purple-soft: rgba(142, 36, 170, 0.22);
+  --success: #a3cf62;
+  --success-strong: #39ff14;
+  --warning: #ff9800;
+  --warning-dark: #e65100;
+  --danger: #ff3b30;
+  --danger-dark: #d32f2f;
+  --button: #202127;
+  --button-hover: #262832;
+  --button-active: rgba(0, 240, 255, 0.1);
+  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 
 * {
@@ -34,16 +45,17 @@ body {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(340px, 520px);
+  grid-template-columns: minmax(240px, 1fr) minmax(340px, 560px);
   gap: 24px;
   align-items: start;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .eyebrow {
-  margin: 0 0 4px;
-  color: var(--accent);
-  font-size: 12px;
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -51,15 +63,19 @@ body {
 h1,
 h2 {
   margin: 0;
+  letter-spacing: 0;
 }
 
 h1 {
-  font-size: 34px;
+  color: #ffffff;
+  font-size: 26px;
   line-height: 1.1;
+  font-weight: 800;
 }
 
 h2 {
-  font-size: 16px;
+  color: var(--text-soft);
+  font-size: 15px;
   margin-bottom: 14px;
 }
 
@@ -75,31 +91,65 @@ h2 {
   border-radius: 999px;
   padding: 6px 10px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.035);
   font-size: 12px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .chip.running,
-.chip.installed,
-.chip.on {
-  color: var(--good);
-  border-color: rgba(123, 216, 143, 0.5);
+.chip.connected,
+.chip.installed {
+  color: var(--success);
+  border-color: rgba(163, 207, 98, 0.42);
+  background: rgba(163, 207, 98, 0.06);
+}
+
+.chip.on,
+.chip.active {
+  color: var(--cyan);
+  border-color: rgba(0, 240, 255, 0.42);
+  background: rgba(0, 240, 255, 0.06);
 }
 
 .chip.stopped,
+.chip.waiting,
+.chip.waiting-stale,
+.chip.stale,
 .chip.not-found,
 .chip.off {
-  color: var(--warn);
-  border-color: rgba(246, 193, 119, 0.45);
+  color: var(--warning);
+  border-color: rgba(255, 152, 0, 0.38);
+  background: rgba(255, 152, 0, 0.055);
+}
+
+.chip.error,
+.chip.failed,
+.chip.offline {
+  color: var(--danger);
+  border-color: rgba(255, 59, 48, 0.42);
+  background: rgba(255, 59, 48, 0.06);
 }
 
 .panel {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   padding: 18px;
   margin-bottom: 14px;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 0;
+  width: 2px;
+  height: 18px;
+  border-radius: 0 2px 2px 0;
+  background: var(--purple);
+  opacity: 0.72;
 }
 
 .button-grid {
@@ -113,36 +163,59 @@ h2 {
 }
 
 button {
-  min-height: 40px;
-  border: 1px solid rgba(118, 199, 255, 0.28);
-  border-radius: 8px;
-  padding: 9px 12px;
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 8px 12px;
   background: var(--button);
-  color: var(--text);
+  color: var(--text-soft);
   font: inherit;
   font-size: 13px;
+  font-weight: 750;
   cursor: pointer;
 }
 
 button:hover {
+  border-color: rgba(0, 240, 255, 0.28);
   background: var(--button-hover);
+  color: #ffffff;
+}
+
+button:not(:disabled).is-action-enabled {
+  border-color: rgba(0, 240, 255, 0.32);
+  background: rgba(0, 240, 255, 0.075);
+  color: #ffffff;
+}
+
+button:not(:disabled).is-action-enabled:hover {
+  border-color: rgba(0, 240, 255, 0.5);
+  background: rgba(0, 240, 255, 0.11);
+}
+
+button:focus-visible {
+  outline: 2px solid rgba(0, 240, 255, 0.72);
+  outline-offset: 2px;
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.48;
+  opacity: 0.36;
+  color: var(--muted-dim);
+  background: #17181d;
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 button.secondary {
-  background: var(--secondary);
+  background: #18191e;
   border-color: var(--panel-border);
   color: var(--muted);
 }
 
 button.active {
-  border-color: rgba(118, 199, 255, 0.65);
-  color: var(--text);
-  background: rgba(49, 85, 119, 0.88);
+  border-color: rgba(0, 240, 255, 0.55);
+  color: #ffffff;
+  background: var(--button-active);
+  box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.06);
 }
 
 button.small {
@@ -172,22 +245,34 @@ button.small {
 input {
   width: 100%;
   border: 1px solid var(--panel-border);
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 10px 12px;
-  background: #101724;
+  background: #111215;
   color: var(--text);
   font: inherit;
   font-size: 13px;
+}
+
+input:focus {
+  border-color: rgba(0, 240, 255, 0.46);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.08);
 }
 
 .hint {
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .logs-panel {
   min-height: 270px;
+}
+
+.logs-panel::before {
+  background: var(--cyan);
+  opacity: 0.8;
 }
 
 .logs-header {
@@ -210,14 +295,23 @@ pre {
   overflow: auto;
   margin: 0;
   padding: 12px;
-  border: 1px solid rgba(142, 161, 190, 0.16);
-  border-radius: 8px;
-  background: #070a10;
-  color: #d7e4f5;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  background: #0b0c0e;
+  color: #d7dde7;
+  font-family: var(--mono);
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
+}
+
+pre::-webkit-scrollbar {
+  width: 10px;
+}
+
+pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
 }
 
 @media (max-width: 900px) {

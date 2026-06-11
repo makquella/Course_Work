@@ -44,6 +44,7 @@ let logMode = "clean";
 let hiddenBackendAccessLogs = 0;
 let hiddenOverlayNoiseLogs = 0;
 let currentDemoPreset = "";
+let recordingStatus = "stopped";
 
 const BACKEND_NOISE_PATTERNS = [
   /GET\s+\/overlay\/recommendation\b/,
@@ -63,7 +64,7 @@ function createWindow() {
     height: 720,
     minWidth: 860,
     minHeight: 620,
-    title: "Dota AI Coach Launcher",
+    title: "Dota 2 Coach",
     backgroundColor: "#10131a",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -138,6 +139,7 @@ function publicStatus() {
     overlay: processes.overlay ? "running" : "stopped",
     demo: processes.demo ? "running" : "stopped",
     demoPreset: processes.demo ? currentDemoPreset : "",
+    recording: recordingStatus,
     gsiConfig: gsiStatus.status,
     gsiPath: gsiStatus.path,
     mode,
@@ -212,9 +214,11 @@ function spawnManaged(name, command, args, options = {}) {
     return false;
   }
 
-  appendLog("launcher", `Starting ${name}: ${command} ${args.join(" ")}`);
+  const cwd = options.cwd || REPO_ROOT;
+  const commandLine = `${command} ${args.join(" ")}`.trim();
+  appendLog("launcher", `Starting ${name}: ${commandLine} (cwd: ${cwd})`, { force: true });
   const child = spawn(command, args, {
-    cwd: options.cwd || REPO_ROOT,
+    cwd,
     env: { ...process.env, ...(options.env || {}) },
     shell: false,
     detached: process.platform !== "win32",
@@ -225,7 +229,7 @@ function spawnManaged(name, command, args, options = {}) {
   child.stdout.on("data", (chunk) => appendLog(name, chunk.toString()));
   child.stderr.on("data", (chunk) => appendLog(name, chunk.toString()));
   child.on("error", (error) => {
-    appendLog(name, `Failed to start: ${error.message}`);
+    appendLog(name, `Failed to start: ${error.message}; command=${commandLine}; cwd=${cwd}`, { force: true });
     processes[name] = null;
     if (name === "demo") {
       mode = "Live GSI";
@@ -235,6 +239,15 @@ function spawnManaged(name, command, args, options = {}) {
   });
   child.on("exit", (code, signal) => {
     appendLog(name, `Exited with code ${code ?? "null"} signal ${signal ?? "null"}.`);
+    if (name === "backend" && code !== null) {
+      appendLog(
+        "launcher",
+        code === 0
+          ? "Backend process stopped cleanly. If this happened immediately after Start Backend, run the bundled backend exe directly from resources/backend to inspect console output."
+          : `Backend process failed with code ${code}. Check the backend log lines above and verify port 8000 is free.`,
+        { force: true }
+      );
+    }
     processes[name] = null;
     if (name === "demo") {
       mode = "Live GSI";
@@ -317,18 +330,23 @@ function startBackend() {
     if (!ensureExecutableExists("Backend", executable)) {
       return false;
     }
-    return spawnManaged("backend", executable, [], {
+    const started = spawnManaged("backend", executable, [], {
       cwd: path.dirname(executable),
       env: {
         USE_LLM: "false",
         SIMULATION_USE_LLM: "false",
         LIVE_CONSERVATIVE_MODE: "true",
+        DOTA_AI_BACKEND_LOG_LEVEL: "info",
         SESSION_RECORDS_DIR
       }
     });
+    if (started) {
+      verifyBackendHealthAfterStart();
+    }
+    return started;
   }
 
-  return spawnManaged(
+  const started = spawnManaged(
     "backend",
     pythonExecutable(),
     [
@@ -352,6 +370,27 @@ function startBackend() {
       }
     }
   );
+  if (started) {
+    verifyBackendHealthAfterStart();
+  }
+  return started;
+}
+
+function verifyBackendHealthAfterStart() {
+  setTimeout(async () => {
+    if (!processes.backend) {
+      return;
+    }
+    if (await isBackendReady()) {
+      appendLog("launcher", "Backend health check OK: http://127.0.0.1:8000/health", { force: true });
+      return;
+    }
+    appendLog(
+      "launcher",
+      "Backend process is running, but /health is not reachable yet. Verify no other process owns port 8000 and check backend stderr above.",
+      { force: true }
+    );
+  }, 2500);
 }
 
 function startOverlay() {
@@ -362,7 +401,8 @@ function startOverlay() {
     }
     return spawnManaged("overlay", executable, [], { cwd: path.dirname(executable) });
   }
-  return spawnManaged("overlay", npmCommand(), ["run", "dev"], { cwd: OVERLAY_DIR });
+  const overlayArgs = process.platform === "linux" ? ["run", "dev:x11"] : ["run", "dev"];
+  return spawnManaged("overlay", npmCommand(), overlayArgs, { cwd: OVERLAY_DIR });
 }
 
 async function runDemo(presetName = "plMacro", includeDeepReview = false) {
@@ -485,10 +525,13 @@ async function checkLiveGsiStatus() {
 async function startLiveRecording() {
   try {
     const status = await requestBackendJson("/session-recording/start", "POST");
+    recordingStatus = status.active ? "running" : "stopped";
     appendLog("recording", `Recording started: ${status.session_dir || SESSION_RECORDS_DIR}`, { force: true });
+    updateStatus();
     return status;
   } catch (error) {
     appendLog("recording", `Could not start recording: ${error.message}`, { force: true });
+    updateStatus();
     return { error: error.message };
   }
 }
@@ -496,10 +539,13 @@ async function startLiveRecording() {
 async function stopLiveRecording() {
   try {
     const status = await requestBackendJson("/session-recording/stop", "POST");
+    recordingStatus = status.active ? "running" : "stopped";
     appendLog("recording", `Recording stopped: ${status.session_dir || SESSION_RECORDS_DIR}`, { force: true });
+    updateStatus();
     return status;
   } catch (error) {
     appendLog("recording", `Could not stop recording: ${error.message}`, { force: true });
+    updateStatus();
     return { error: error.message };
   }
 }

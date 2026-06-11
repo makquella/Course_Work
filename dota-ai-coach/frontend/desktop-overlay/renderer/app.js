@@ -11,7 +11,7 @@ let config = {
   locked: true,
   autoHideMs: 8000,
   urgentAutoHideMs: 12000,
-  debugVisible: true
+  debugVisible: false
 };
 let pollTimer = null;
 let hideTimer = null;
@@ -128,7 +128,11 @@ function renderAdvice(data, options = { refreshTimer: true }) {
     data.last_death_minute || ""
   ].join("|");
 
-  shell.className = `overlay-shell ${adviceMode === "urgent" ? "urgent" : "coaching"}`;
+  shell.className = [
+    "overlay-shell",
+    adviceMode === "urgent" ? "urgent" : "coaching",
+    priorityClassName(recommendation.priority)
+  ].filter(Boolean).join(" ");
   labelEl.textContent = labelText(adviceMode, data);
   priorityEl.textContent = priorityText(recommendation, data);
   actionEl.textContent = recommendation.action || "No urgent advice";
@@ -278,6 +282,23 @@ function priorityText(recommendation, data) {
     parts.push(data.context_confidence);
   }
   return parts.join(" · ");
+}
+
+function priorityClassName(priority) {
+  const value = String(priority || "").toLowerCase();
+  if (value === "high" || value === "urgent") {
+    return "priority-high";
+  }
+  if (value === "medium") {
+    return "priority-medium";
+  }
+  if (value === "low") {
+    return "priority-low";
+  }
+  if (value === "safe") {
+    return "priority-safe";
+  }
+  return "";
 }
 
 function minuteLabel(minute) {

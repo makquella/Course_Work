@@ -3,7 +3,7 @@
   "pollIntervalMs": 1000,
   "positionPreset": "custom",
   "locked": true,
-  "debugVisible": true,
+  "debugVisible": false,
   "opacity": 0.92,
   "autoHideMs": 8000,
   "urgentAutoHideMs": 12000,

@@ -6,8 +6,10 @@
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
+    "dev:x11": "ELECTRON_ENABLE_WAYLAND=0 ELECTRON_OZONE_PLATFORM_HINT=x11 electron . --ozone-platform=x11",
     "start": "electron .",
     "pack": "electron-builder --dir",
+    "dist:unpacked": "electron-builder --dir",
     "dist": "electron-builder --win portable"
   },
   "devDependencies": {

@@ -2,6 +2,7 @@ const statusEls = {
   backend: document.querySelector("#backend-status"),
   overlay: document.querySelector("#overlay-status"),
   demo: document.querySelector("#demo-status"),
+  recording: document.querySelector("#recording-status"),
   gsi: document.querySelector("#gsi-status"),
   mode: document.querySelector("#mode-status"),
   llm: document.querySelector("#llm-status")
@@ -28,6 +29,15 @@ const demoStartButtons = [
   document.querySelector("#preset-jugg"),
   document.querySelector("#deep-review")
 ].filter(Boolean);
+const controlButtons = {
+  startBackend: document.querySelector("#start-backend"),
+  stopBackend: document.querySelector("#stop-backend"),
+  startOverlay: document.querySelector("#start-overlay"),
+  stopOverlay: document.querySelector("#stop-overlay"),
+  stopDemo: document.querySelector("#stop-demo"),
+  startRecording: document.querySelector("#start-recording"),
+  stopRecording: document.querySelector("#stop-recording")
+};
 
 init();
 
@@ -117,17 +127,43 @@ function renderStatus(status) {
     ? `Demo: running · ${status.demoPreset}`
     : `Demo: ${status.demo || "stopped"}`;
   setChip(statusEls.demo, demoText, status.demo);
+  setChip(statusEls.recording, `Recording: ${status.recording || "stopped"}`, status.recording);
   setChip(statusEls.gsi, `GSI config: ${status.gsiConfig || "unknown"}`, normalizeClass(status.gsiConfig));
   setChip(statusEls.mode, `Mode: ${status.mode || "Live GSI"}`, "running");
   setChip(statusEls.llm, `LLM: ${status.llm || "off"}`, status.llm);
   renderLogMode(status.logMode || "clean");
-  renderDemoButtons(status.demo === "running");
+  renderControlButtons(status);
   updateGsiDetail({ status: status.gsiConfig, path: status.gsiPath });
+}
+
+function renderControlButtons(status = {}) {
+  const backendRunning = status.backend === "running";
+  const overlayRunning = status.overlay === "running";
+  const demoRunning = status.demo === "running";
+  const recordingRunning = status.recording === "running";
+
+  setActionEnabled(controlButtons.startBackend, !backendRunning);
+  setActionEnabled(controlButtons.stopBackend, backendRunning);
+  setActionEnabled(controlButtons.startOverlay, !overlayRunning);
+  setActionEnabled(controlButtons.stopOverlay, overlayRunning);
+  setActionEnabled(controlButtons.stopDemo, demoRunning);
+  setActionEnabled(controlButtons.startRecording, !recordingRunning);
+  setActionEnabled(controlButtons.stopRecording, recordingRunning);
+  renderDemoButtons(demoRunning);
+}
+
+function setActionEnabled(button, enabled) {
+  if (!button) {
+    return;
+  }
+  button.disabled = !enabled;
+  button.classList.toggle("is-action-enabled", Boolean(enabled));
 }
 
 function renderDemoButtons(isDemoRunning) {
   for (const button of demoStartButtons) {
     button.disabled = isDemoRunning;
+    button.classList.toggle("is-action-enabled", !isDemoRunning);
     button.title = isDemoRunning ? "Demo is already running. Stop Demo before starting another preset." : "";
   }
 }
@@ -149,7 +185,8 @@ function setChip(element, text, state) {
 function normalizeClass(value) {
   return String(value || "unknown")
     .toLowerCase()
-    .replace(/\s+/g, "-");
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function updateGsiDetail(result = {}) {
