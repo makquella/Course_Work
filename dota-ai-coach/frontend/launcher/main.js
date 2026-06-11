@@ -36,6 +36,12 @@ const processes = {
   overlay: null,
   demo: null
 };
+const processStatus = {
+  backend: "stopped",
+  overlay: "stopped",
+  demo: "stopped"
+};
+const stoppingProcesses = new Set();
 let mode = "Live GSI";
 let llmEnabled = false;
 let gsiStatus = { status: "unknown", path: "" };
@@ -45,6 +51,7 @@ let hiddenBackendAccessLogs = 0;
 let hiddenOverlayNoiseLogs = 0;
 let currentDemoPreset = "";
 let recordingStatus = "stopped";
+let backendExternalReady = false;
 
 const BACKEND_NOISE_PATTERNS = [
   /GET\s+\/overlay\/recommendation\b/,
@@ -135,10 +142,10 @@ function hiddenLogKind(scope, line) {
 
 function publicStatus() {
   return {
-    backend: processes.backend ? "running" : "stopped",
-    overlay: processes.overlay ? "running" : "stopped",
-    demo: processes.demo ? "running" : "stopped",
-    demoPreset: processes.demo ? currentDemoPreset : "",
+    backend: backendExternalReady ? "running" : processStatus.backend,
+    overlay: processStatus.overlay,
+    demo: processStatus.demo,
+    demoPreset: processStatus.demo !== "stopped" ? currentDemoPreset : "",
     recording: recordingStatus,
     gsiConfig: gsiStatus.status,
     gsiPath: gsiStatus.path,
@@ -208,27 +215,73 @@ function ensureExecutableExists(name, executablePath) {
   return false;
 }
 
+function normalizeArgs(args = []) {
+  if (!Array.isArray(args)) {
+    return [];
+  }
+  return args
+    .filter((arg) => arg !== undefined && arg !== null)
+    .map((arg) => String(arg));
+}
+
+function normalizeEnv(env = {}) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    normalized[key] = String(value);
+  }
+  return normalized;
+}
+
 function spawnManaged(name, command, args, options = {}) {
-  if (processes[name]) {
+  if (processes[name] || processStatus[name] === "starting") {
     appendLog("launcher", `${name} is already running.`);
     return false;
   }
 
   const cwd = options.cwd || REPO_ROOT;
-  const commandLine = `${command} ${args.join(" ")}`.trim();
+  const safeArgs = normalizeArgs(args);
+  const commandLine = `${command} ${safeArgs.join(" ")}`.trim();
+  if (!command) {
+    appendLog("launcher", `Cannot start ${name}: command is empty. cwd=${cwd}`, { force: true });
+    return false;
+  }
+  if (!fs.existsSync(cwd)) {
+    appendLog("launcher", `Cannot start ${name}: cwd does not exist: ${cwd}; command=${commandLine}`, { force: true });
+    return false;
+  }
   appendLog("launcher", `Starting ${name}: ${commandLine} (cwd: ${cwd})`, { force: true });
-  const child = spawn(command, args, {
-    cwd,
-    env: { ...process.env, ...(options.env || {}) },
-    shell: false,
-    detached: process.platform !== "win32",
-    windowsHide: true
-  });
+  processStatus[name] = "starting";
+  updateStatus();
+
+  let child = null;
+  try {
+    child = spawn(command, safeArgs, {
+      cwd,
+      env: normalizeEnv({ ...process.env, ...(options.env || {}) }),
+      shell: Boolean(options.shell),
+      detached: process.platform !== "win32",
+      windowsHide: true
+    });
+  } catch (error) {
+    processStatus[name] = "stopped";
+    appendLog(name, `Failed to start: ${error.message}; command=${commandLine}; cwd=${cwd}`, { force: true });
+    updateStatus();
+    return false;
+  }
   processes[name] = child;
 
+  child.on("spawn", () => {
+    processStatus[name] = "running";
+    appendLog("launcher", `${name} process started with pid ${child.pid}.`, { force: true });
+    updateStatus();
+  });
   child.stdout.on("data", (chunk) => appendLog(name, chunk.toString()));
   child.stderr.on("data", (chunk) => appendLog(name, chunk.toString()));
   child.on("error", (error) => {
+    processStatus[name] = "stopped";
     appendLog(name, `Failed to start: ${error.message}; command=${commandLine}; cwd=${cwd}`, { force: true });
     processes[name] = null;
     if (name === "demo") {
@@ -238,8 +291,10 @@ function spawnManaged(name, command, args, options = {}) {
     updateStatus();
   });
   child.on("exit", (code, signal) => {
+    const wasStopping = stoppingProcesses.has(name);
+    stoppingProcesses.delete(name);
     appendLog(name, `Exited with code ${code ?? "null"} signal ${signal ?? "null"}.`);
-    if (name === "backend" && code !== null) {
+    if (name === "backend" && code !== null && !wasStopping) {
       appendLog(
         "launcher",
         code === 0
@@ -247,8 +302,14 @@ function spawnManaged(name, command, args, options = {}) {
           : `Backend process failed with code ${code}. Check the backend log lines above and verify port 8000 is free.`,
         { force: true }
       );
+    } else if (wasStopping) {
+      appendLog("launcher", `${name} stopped by launcher request.`, { force: true });
     }
     processes[name] = null;
+    processStatus[name] = "stopped";
+    if (name === "backend") {
+      backendExternalReady = false;
+    }
     if (name === "demo") {
       mode = "Live GSI";
       appendLog("launcher", "Demo stopped.", { force: true });
@@ -265,12 +326,22 @@ function spawnManaged(name, command, args, options = {}) {
 }
 
 function stopManaged(name) {
+  appendLog("launcher", `stopManaged begins for ${name}.`, { force: true });
   const child = processes[name];
   if (!child) {
+    if (name === "backend" && backendExternalReady) {
+      appendLog(
+        "launcher",
+        "Backend is reachable on /health but was not started by this launcher, so it will not be killed.",
+        { force: true }
+      );
+      return false;
+    }
     appendLog("launcher", `${name} is not running.`);
     return false;
   }
   appendLog("launcher", `Stopping ${name}...`);
+  stoppingProcesses.add(name);
   killProcessTree(name, child);
   return true;
 }
@@ -323,13 +394,31 @@ function killProcessTree(name, child) {
   }
 }
 
-function startBackend() {
+async function startBackend() {
+  appendLog("launcher", "startBackend begins.", { force: true });
   llmEnabled = false;
+  if (processes.backend || processStatus.backend === "starting") {
+    appendLog("launcher", "Backend is already managed by launcher.", { force: true });
+    return true;
+  }
+  processStatus.backend = "starting";
+  updateStatus();
+  if (await isBackendReady()) {
+    backendExternalReady = true;
+    processStatus.backend = "running";
+    appendLog("launcher", "Backend is already running and /health is reachable; using existing backend.", { force: true });
+    updateStatus();
+    return true;
+  }
+  backendExternalReady = false;
   if (IS_PACKAGED) {
     const executable = packagedBackendExecutable();
     if (!ensureExecutableExists("Backend", executable)) {
+      processStatus.backend = "stopped";
+      updateStatus();
       return false;
     }
+    processStatus.backend = "stopped";
     const started = spawnManaged("backend", executable, [], {
       cwd: path.dirname(executable),
       env: {
@@ -346,6 +435,7 @@ function startBackend() {
     return started;
   }
 
+  processStatus.backend = "stopped";
   const started = spawnManaged(
     "backend",
     pythonExecutable(),
@@ -381,6 +471,7 @@ function verifyBackendHealthAfterStart() {
     if (!processes.backend) {
       return;
     }
+    appendLog("launcher", "Backend health check started.", { force: true });
     if (await isBackendReady()) {
       appendLog("launcher", "Backend health check OK: http://127.0.0.1:8000/health", { force: true });
       return;
@@ -394,12 +485,16 @@ function verifyBackendHealthAfterStart() {
 }
 
 function startOverlay() {
+  appendLog("launcher", "startOverlay begins.", { force: true });
   if (IS_PACKAGED) {
     const executable = packagedOverlayExecutable();
     if (!ensureExecutableExists("Overlay", executable)) {
       return false;
     }
     return spawnManaged("overlay", executable, [], { cwd: path.dirname(executable) });
+  }
+  if (process.platform === "win32") {
+    return spawnManaged("overlay", "cmd.exe", ["/d", "/s", "/c", "npm run dev"], { cwd: OVERLAY_DIR });
   }
   const overlayArgs = process.platform === "linux" ? ["run", "dev:x11"] : ["run", "dev"];
   return spawnManaged("overlay", npmCommand(), overlayArgs, { cwd: OVERLAY_DIR });
@@ -695,10 +790,22 @@ ipcMain.handle("launcher:copy-logs", () => {
   clipboard.writeText(logs);
   return true;
 });
-ipcMain.handle("launcher:start-backend", () => startBackend());
-ipcMain.handle("launcher:stop-backend", () => stopManaged("backend"));
-ipcMain.handle("launcher:start-overlay", () => startOverlay());
-ipcMain.handle("launcher:stop-overlay", () => stopManaged("overlay"));
+ipcMain.handle("launcher:start-backend", () => {
+  appendLog("launcher", "IPC received: Start Backend.", { force: true });
+  return startBackend();
+});
+ipcMain.handle("launcher:stop-backend", () => {
+  appendLog("launcher", "IPC received: Stop Backend.", { force: true });
+  return stopManaged("backend");
+});
+ipcMain.handle("launcher:start-overlay", () => {
+  appendLog("launcher", "IPC received: Start Overlay.", { force: true });
+  return startOverlay();
+});
+ipcMain.handle("launcher:stop-overlay", () => {
+  appendLog("launcher", "IPC received: Stop Overlay.", { force: true });
+  return stopManaged("overlay");
+});
 ipcMain.handle("launcher:run-demo", (_event, presetName) => runDemo(presetName, false));
 ipcMain.handle("launcher:run-deep-review", (_event, presetName) => runDemo(presetName, true));
 ipcMain.handle("launcher:stop-demo", () => stopManaged("demo"));

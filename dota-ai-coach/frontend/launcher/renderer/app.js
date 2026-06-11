@@ -137,10 +137,10 @@ function renderStatus(status) {
 }
 
 function renderControlButtons(status = {}) {
-  const backendRunning = status.backend === "running";
-  const overlayRunning = status.overlay === "running";
-  const demoRunning = status.demo === "running";
-  const recordingRunning = status.recording === "running";
+  const backendRunning = isActiveProcess(status.backend);
+  const overlayRunning = isActiveProcess(status.overlay);
+  const demoRunning = isActiveProcess(status.demo);
+  const recordingRunning = isActiveProcess(status.recording);
 
   setActionEnabled(controlButtons.startBackend, !backendRunning);
   setActionEnabled(controlButtons.stopBackend, backendRunning);
@@ -150,6 +150,10 @@ function renderControlButtons(status = {}) {
   setActionEnabled(controlButtons.startRecording, !recordingRunning);
   setActionEnabled(controlButtons.stopRecording, recordingRunning);
   renderDemoButtons(demoRunning);
+}
+
+function isActiveProcess(state) {
+  return state === "running" || state === "starting";
 }
 
 function setActionEnabled(button, enabled) {
